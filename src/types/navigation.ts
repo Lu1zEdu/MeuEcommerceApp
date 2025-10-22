@@ -11,5 +11,5 @@ export type Product = {
     name: string;
     price: number;
     description: string;
-    imageUrl: string; // Adicionaremos imagens depois
+    imageUrl: string;
 };

@@ -1,96 +1,174 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+// src/screens/ProductListScreen.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+    View,
+    Text,
+    FlatList,
+    StyleSheet,
+    ActivityIndicator,
+    Alert,
+    TouchableOpacity, // Precisa para o botão de logout dentro do header (se mantiver)
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { PRODUCTS } from '../data/products';
 import { Product, RootStackParamList } from '../types/navigation';
+import { auth, db, collection, getDocs } from '../firebase/firebaseConfig';
+import { signOut } from 'firebase/auth'; // Import signOut se for usar o botão aqui
+import ProductCard from '../components/ProductCard';
+import { PRODUCTS as LOCAL_PRODUCTS } from '../data/products';
+import HomeHeader from '../components/HomeHeader';
+import { useTheme } from '../context/ThemeContext'; // 1. Importar useTheme
 
 type ProductListNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductList'>;
 
+const numColumns = 2;
+const itemMargin = 8;
+
 export default function ProductListScreen() {
     const navigation = useNavigation<ProductListNavigationProp>();
+    const { colors } = useTheme(); // 2. Obter cores
+    const [products, setProducts] = useState<Product[]>(LOCAL_PRODUCTS);
+    const [loading, setLoading] = useState(false);
+    const [firestoreError, setFirestoreError] = useState<string | null>(null);
+
+    // Buscar produtos do Firestore (código inalterado)
+    useFocusEffect(
+        useCallback(() => {
+            let isMounted = true;
+            const fetchFirestoreProducts = async () => {
+                setLoading(true);
+                setFirestoreError(null);
+                try {
+                    // ... (lógica de busca no firestore - sem alterações visuais) ...
+                    const productsCol = collection(db, 'products');
+                    const productSnapshot = await getDocs(productsCol);
+                    const firestoreProductList = productSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    })) as Product[];
+
+                    if (isMounted) {
+                        if (firestoreProductList.length > 0) {
+                            const combined = [...firestoreProductList, ...LOCAL_PRODUCTS];
+                            const uniqueProducts = Array.from(new Map(combined.map(p => [p.id, p])).values());
+                            setProducts(uniqueProducts);
+                        } else {
+                            setProducts(LOCAL_PRODUCTS);
+                        }
+                    }
+                } catch (error: any) {
+                    console.error("Erro ao buscar produtos do Firestore:", error);
+                    if (isMounted) {
+                        setProducts(LOCAL_PRODUCTS);
+                        setFirestoreError("Não foi possível carregar produtos do banco de dados.");
+                        Alert.alert("Erro Firestore", "Não foi possível carregar produtos do banco de dados.");
+                    }
+                } finally {
+                    if (isMounted) {
+                        setLoading(false);
+                    }
+                }
+            };
+            fetchFirestoreProducts();
+            return () => { isMounted = false; };
+        }, [])
+    );
 
     const renderItem = ({ item }: { item: Product }) => (
-        <TouchableOpacity
-            style={styles.productItem}
+        <ProductCard
+            product={item}
             onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-        >
-            <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
-            <View style={styles.productInfo}>
-                <Text style={styles.productName}>{item.name}</Text>
-                <Text style={styles.productPrice}>R$ {item.price.toFixed(2)}</Text>
-            </View>
-        </TouchableOpacity>
+        />
     );
+
+    // 3. Mover StyleSheet para dentro
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background, // Usar cor do tema
+        },
+        centerContent: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+            backgroundColor: colors.background, // Usar cor do tema
+        },
+        loadingOverlay: {
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0, // Cobrir header também
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.3)', // Fundo escuro semitransparente
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10,
+        },
+        loadingText: {
+            marginTop: 10,
+            fontSize: 16,
+            color: '#FFFFFF', // Texto branco no overlay escuro
+            fontWeight: 'bold',
+        },
+        errorContainer: {
+            padding: 10,
+            backgroundColor: colors.notification, // Usar cor de notificação (vermelho)
+            margin: itemMargin,
+            borderRadius: 5,
+            borderWidth: 1,
+            borderColor: colors.border, // Borda sutil
+        },
+        errorText: {
+            color: colors.card, // Texto contrastante (branco no vermelho)
+            textAlign: 'center',
+            fontWeight: 'bold',
+        },
+        emptyText: {
+            fontSize: 16,
+            color: colors.textSecondary, // Usar cor do tema
+            textAlign: 'center',
+        },
+        listContainer: {
+            paddingHorizontal: itemMargin / 2,
+            paddingBottom: itemMargin,
+        },
+    });
+
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity
-                style={styles.cartButton}
-                onPress={() => navigation.navigate('Cart')}
-            >
-                <Text style={styles.cartButtonText}>🛒 Ver Carrinho</Text>
-            </TouchableOpacity>
+            <HomeHeader />
 
-            <FlatList
-                data={PRODUCTS}
-                renderItem={renderItem}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContainer}
-            />
+            {/* Indicador de Loading */}
+            {loading && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#FFFFFF" />
+                    <Text style={styles.loadingText}>Atualizando produtos...</Text>
+                </View>
+            )}
+
+            {/* Mensagem de Erro do Firestore */}
+            {firestoreError && !loading && (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{firestoreError}</Text>
+                </View>
+            )}
+
+            {/* Lista de Produtos */}
+            {products.length === 0 && !loading ? (
+                <View style={styles.centerContent}>
+                    <Text style={styles.emptyText}>Nenhum produto para exibir.</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={products}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id}
+                    numColumns={numColumns}
+                    contentContainerStyle={styles.listContainer}
+                />
+            )}
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f8f8f8',
-    },
-    listContainer: {
-        padding: 10,
-    },
-    productItem: {
-        backgroundColor: '#fff',
-        padding: 15,
-        marginBottom: 10,
-        borderRadius: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 3,
-    },
-    productImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 5,
-        marginRight: 15,
-    },
-    productInfo: {
-        flex: 1,
-    },
-    productName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    productPrice: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 4,
-    },
-    cartButton: {
-        backgroundColor: '#007bff',
-        padding: 10,
-        margin: 10,
-        borderRadius: 5,
-        alignItems: 'center',
-    },
-    cartButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-    }
-});

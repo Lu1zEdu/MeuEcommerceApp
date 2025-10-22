@@ -6,8 +6,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 import { RootStackParamList } from '../types/navigation';
-import { useTheme } from '../context/ThemeContext'; // 1. Importar
-import { lightColors } from '../theme/colors'; // Para keyboardAppearance
+import { useTheme } from '../context/ThemeContext';
+import { lightColors } from '../theme/colors';
+import { useTranslation } from 'react-i18next';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -15,12 +16,12 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const navigation = useNavigation<LoginScreenNavigationProp>();
-    const { colors } = useTheme(); // 2. Obter cores
+    const { colors } = useTheme();
+    const { t } = useTranslation();
 
     const handleLogin = async () => {
-        // ... (lógica de login inalterada) ...
         if (!email || !password) {
-            Alert.alert("Erro", "Por favor, preencha e-mail e senha.");
+            Alert.alert(t('alertErrorTitle'), t('errorFillFields'));
             return;
         }
         try {
@@ -28,11 +29,10 @@ export default function LoginScreen() {
             console.log('Login bem-sucedido!');
         } catch (error: any) {
             console.error("Erro no login:", error);
-            Alert.alert("Erro no Login", error.message || "Não foi possível fazer login.");
+            Alert.alert(t('alertErrorTitle'), t('errorLoginFailed'));
         }
     };
 
-    // 3. Mover StyleSheet para dentro
     const styles = StyleSheet.create({
         scrollContainer: {
             flexGrow: 1,
@@ -83,18 +83,15 @@ export default function LoginScreen() {
     });
 
     return (
-        // KeyboardAvoidingView + ScrollView para melhor experiência com teclado
-        <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1 }} // Ocupa toda a tela
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} >
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.container}>
-                    <Text style={styles.title}>MeuEcommerce</Text>
+                    {/* 3. Usar t() para textos visíveis */}
+                    <Text style={styles.title}>{t('loginTitle')}</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="E-mail"
-                        placeholderTextColor={colors.placeholder} // Cor do tema
+                        placeholder={t('loginEmailPlaceholder')}
+                        placeholderTextColor={colors.placeholder}
                         value={email}
                         onChangeText={setEmail}
                         keyboardType="email-address"
@@ -103,18 +100,18 @@ export default function LoginScreen() {
                     />
                     <TextInput
                         style={styles.input}
-                        placeholder="Senha"
-                        placeholderTextColor={colors.placeholder} // Cor do tema
+                        placeholder={t('loginPasswordPlaceholder')}
+                        placeholderTextColor={colors.placeholder}
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
                         keyboardAppearance={colors.text === lightColors.text ? 'light' : 'dark'}
                     />
                     <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                        <Text style={styles.buttonText}>Entrar</Text>
+                        <Text style={styles.buttonText}>{t('loginButton')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-                        <Text style={styles.linkText}>Não tem uma conta? Cadastre-se</Text>
+                        <Text style={styles.linkText}>{t('loginSignupLink')}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

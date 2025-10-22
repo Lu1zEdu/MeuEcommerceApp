@@ -81,7 +81,6 @@ export default function ProductListScreen() {
         />
     );
 
-    // 3. Mover StyleSheet para dentro
     const styles = StyleSheet.create({
         container: {
             flex: 1,
@@ -106,7 +105,7 @@ export default function ProductListScreen() {
             zIndex: 10,
         },
         loadingText: {
-            marginTop: 10,
+            marginTop: 20,
             fontSize: 16,
             color: '#FFFFFF', // Texto branco no overlay escuro
             fontWeight: 'bold',

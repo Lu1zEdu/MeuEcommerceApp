@@ -1,145 +1,120 @@
 // src/screens/ProfileScreen.tsx
 import React from 'react';
-// 2. Importar Switch
-import { View, Text, StyleSheet, Button, Image, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, Button, Image, Alert, Switch, TouchableOpacity } from 'react-native'; // Adicionado TouchableOpacity
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
-import { useTheme } from '../context/ThemeContext'; // 1. Importar useTheme
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next'; // 1. Importar
 
 const defaultProfilePic = 'https://via.placeholder.com/150/CCCCCC/FFFFFF?text=User';
 
 export default function ProfileScreen() {
-    // 3. Obter dados do tema
     const { colors, isDarkTheme, toggleTheme } = useTheme();
+    const { t, i18n } = useTranslation(); // 2. Obter t e i18n
     const user = auth.currentUser;
+    const currentLanguage = i18n.language; // Pega o idioma atual ('pt' ou 'en')
 
     const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            console.log("Logout da tela de Perfil");
-        } catch (error: any) {
-            console.error("Erro ao fazer logout:", error);
-            Alert.alert("Erro", "Não foi possível fazer logout: " + error.message);
-        }
+        // ... (logout inalterado) ...
+        try { await signOut(auth); } catch (error: any) { Alert.alert(t('alertErrorTitle'), t('errorLogoutFailed')); }
     };
 
-    // Adapta os estilos dinamicamente ou cria estilos separados
-    const dynamicStyles = StyleSheet.create({
-        container: {
-            flex: 1,
-            alignItems: 'center',
-            paddingTop: 40,
-            backgroundColor: colors.background, // Usa cor do tema
-            paddingHorizontal: 20,
-        },
-        profileImage: {
-            width: 120,
-            height: 120,
-            borderRadius: 60,
-            marginBottom: 20,
-            backgroundColor: colors.border, // Usa cor de borda como placeholder
-        },
-        userName: {
-            fontSize: 22,
-            fontWeight: 'bold',
-            color: colors.text, // Usa cor do tema
-            marginBottom: 8,
-        },
-        emailText: {
-            fontSize: 16,
-            color: colors.textSecondary, // Usa cor secundária
-            marginBottom: 40,
-        },
-        buttonContainer: {
-            width: '80%',
-            marginBottom: 20,
-        },
-        themeToggleContainer: { // Container para o switch e label
+    // 3. Função para mudar o idioma
+    const changeLanguage = (lang: 'pt' | 'en') => {
+        i18n.changeLanguage(lang);
+    };
+
+    const styles = StyleSheet.create({ /* ... Estilos dinâmicos usando colors ... */
+        container: { flex: 1, alignItems: 'center', paddingTop: 40, backgroundColor: colors.background, paddingHorizontal: 20 },
+        profileImage: { width: 120, height: 120, borderRadius: 60, marginBottom: 20, backgroundColor: colors.border },
+        userName: { fontSize: 22, fontWeight: 'bold', color: colors.text, marginBottom: 8 },
+        emailText: { fontSize: 16, color: colors.textSecondary, marginBottom: 40 },
+        buttonContainer: { width: '80%', marginBottom: 20 },
+        themeToggleContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '80%', marginTop: 20, marginBottom: 10, paddingVertical: 10, paddingHorizontal: 15, backgroundColor: colors.card, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+        themeToggleText: { fontSize: 16, color: colors.text },
+        languageContainer: { // Container para botões de idioma
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between', // Espaça o texto e o switch
-            width: '80%', // Mesma largura do botão
-            marginTop: 20,
+            justifyContent: 'space-between',
+            width: '80%',
             marginBottom: 20,
             paddingVertical: 10,
             paddingHorizontal: 15,
-            backgroundColor: colors.card, // Fundo do card
+            backgroundColor: colors.card,
             borderRadius: 8,
             borderWidth: 1,
             borderColor: colors.border,
         },
-        themeToggleText: {
+        languageLabel: {
             fontSize: 16,
             color: colors.text,
+            marginRight: 10,
         },
-        placeholder: {
-            fontSize: 16,
-            color: colors.textSecondary,
-            marginTop: 10,
-        }
+        languageButtons: {
+            flexDirection: 'row',
+        },
+        languageButton: {
+            paddingVertical: 5,
+            paddingHorizontal: 12,
+            borderRadius: 5,
+            marginLeft: 10,
+        },
+        languageButtonText: {
+            fontSize: 14,
+            fontWeight: 'bold',
+        },
+        placeholder: { fontSize: 16, color: colors.textSecondary, marginTop: 10 }
     });
 
+
     return (
-        // Usa os estilos dinâmicos
-        <View style={dynamicStyles.container}>
-            <Image
-                source={{ uri: user?.photoURL || defaultProfilePic }}
-                style={dynamicStyles.profileImage}
-            />
-            <Text style={dynamicStyles.userName}>
-                {user?.displayName || 'Nome não definido'}
-            </Text>
-            <Text style={dynamicStyles.emailText}>
-                {user?.email ?? 'E-mail não encontrado'}
-            </Text>
+        <View style={styles.container}>
+            <Image source={{ uri: user?.photoURL || defaultProfilePic }} style={styles.profileImage} />
+            <Text style={styles.userName}> {user?.displayName || 'Nome não definido'} </Text>
+            <Text style={styles.emailText}> {t('profileLoggedInAs')} {user?.email ?? 'E-mail não encontrado'} </Text>
 
-            {/* 4. Adicionar o controle do Tema */}
-            <View style={dynamicStyles.themeToggleContainer}>
-                <Text style={dynamicStyles.themeToggleText}>Tema Escuro</Text>
-                <Switch
-                    trackColor={{ false: "#767577", true: "#81b0ff" }} // Cores da trilha
-                    thumbColor={isDarkTheme ? colors.primary : "#f4f3f4"} // Cor do botão (polegar)
-                    ios_backgroundColor="#3e3e3e"
-                    onValueChange={toggleTheme} // Chama a função do contexto
-                    value={isDarkTheme} // Define se está ligado ou desligado
-                />
+            {/* Toggle Tema */}
+            <View style={styles.themeToggleContainer}>
+                <Text style={styles.themeToggleText}>{t('profileDarkMode')}</Text>
+                <Switch trackColor={{ false: "#767577", true: "#81b0ff" }} thumbColor={isDarkTheme ? colors.primary : "#f4f3f4"} ios_backgroundColor="#3e3e3e" onValueChange={toggleTheme} value={isDarkTheme} />
             </View>
 
-            <View style={dynamicStyles.buttonContainer}>
-                <Button title="Sair (Logout)" onPress={handleLogout} color={colors.notification} /> {/* Usa cor do tema */}
+            {/* Seletor de Idioma */}
+            <View style={styles.languageContainer}>
+                <Text style={styles.languageLabel}>{t('profileLanguage')}</Text>
+                <View style={styles.languageButtons}>
+                    <TouchableOpacity
+                        style={[
+                            styles.languageButton,
+                            { backgroundColor: currentLanguage === 'pt' ? colors.primary : colors.border } // Destaque para o idioma ativo
+                        ]}
+                        onPress={() => changeLanguage('pt')}
+                        disabled={currentLanguage === 'pt'} // Desativa se já for PT
+                    >
+                        <Text style={[styles.languageButtonText, { color: currentLanguage === 'pt' ? colors.card : colors.textSecondary }]}>
+                            {t('pt')} {/* Mostra "Português" */}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.languageButton,
+                            { backgroundColor: currentLanguage === 'en' ? colors.primary : colors.border }
+                        ]}
+                        onPress={() => changeLanguage('en')}
+                        disabled={currentLanguage === 'en'}
+                    >
+                        <Text style={[styles.languageButtonText, { color: currentLanguage === 'en' ? colors.card : colors.textSecondary }]}>
+                            {t('en')} {/* Mostra "English" */}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            <Text style={dynamicStyles.placeholder}>Mais opções em breve...</Text>
+            <View style={styles.buttonContainer}>
+                <Button title={t('profileLogoutButton')} onPress={handleLogout} color={colors.notification} />
+            </View>
+
+            <Text style={styles.placeholder}>Mais opções em breve...</Text>
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f8f8f8',
-        padding: 20,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 20,
-    },
-    emailText: {
-        fontSize: 16,
-        color: '#555',
-        marginBottom: 30,
-    },
-    buttonContainer: {
-        width: '80%', // Para limitar a largura do botão
-        marginBottom: 20,
-    },
-    placeholder: {
-        fontSize: 16,
-        color: '#888',
-        marginTop: 10,
-    }
-});

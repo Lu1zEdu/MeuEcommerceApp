@@ -1,10 +1,12 @@
-import React from 'react';
+import './src/services/i18n';
+import React, { useEffect } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { StatusBar } from 'expo-status-bar';
 import { CartProvider } from './src/context/CartContext';
-import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext'
+import { WishlistProvider } from './src/context/WishlistContext';
 
 const AppContent: React.FC = () => {
   const { theme, colors, isDarkTheme } = useTheme();
@@ -34,7 +36,9 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <CartProvider>
-          <AppContent />
+          <WishlistProvider>
+            <AppContent />
+          </WishlistProvider>
         </CartProvider>
       </ThemeProvider>
     </SafeAreaProvider>

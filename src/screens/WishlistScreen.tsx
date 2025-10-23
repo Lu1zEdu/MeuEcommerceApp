@@ -1,14 +1,13 @@
-// src/screens/WishlistScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native'; // Importar useNavigation
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'; // Para navegação
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
-import { useWishlist } from '../context/WishlistContext'; // Hook da wishlist
-import { Product, RootStackParamList } from '../types/navigation'; // Tipo Product
-import { db, collection, getDocs, query, where } from '../firebase/firebaseConfig'; // Funções do Firestore
-import ProductCard from '../components/ProductCard'; // Componente para exibir o produto
-import { useTranslation } from 'react-i18next'; // Para traduções
+import { useWishlist } from '../context/WishlistContext';
+import { Product, RootStackParamList } from '../types/navigation';
+import { db, collection, getDocs, query, where } from '../firebase/firebaseConfig';
+import ProductCard from '../components/ProductCard';
+import { useTranslation } from 'react-i18next';
 import { documentId } from 'firebase/firestore';
 
 type WishlistScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Wishlist'>;
@@ -16,22 +15,42 @@ type WishlistScreenNavigationProp = NativeStackNavigationProp<RootStackParamList
 export default function WishlistScreen() {
     const { colors } = useTheme();
     const { t } = useTranslation();
-    const navigation = useNavigation<WishlistScreenNavigationProp>(); // Hook de navegação
-    const { wishlistProductIds, loadingWishlist: loadingContext } = useWishlist(); // Pega IDs e loading do contexto
-    const [wishlistItems, setWishlistItems] = useState<Product[]>([]); // Estado para os detalhes dos produtos
-    const [loadingProducts, setLoadingProducts] = useState(false); // Loading para busca dos detalhes
+    const navigation = useNavigation<WishlistScreenNavigationProp>();
+    const { wishlistProductIds, loadingWishlist: loadingContext } = useWishlist();
+    const [wishlistItems, setWishlistItems] = useState<Product[]>([]);
+    const [loadingProducts, setLoadingProducts] = useState(false);
 
     const fetchWishlistProductDetails = useCallback(async () => {
-        if (wishlistProductIds.length === 0 || loadingContext) {
-            setWishlistItems([]); // Limpa a lista se não houver IDs ou contexto carregando
-            setLoadingProducts(false); // Garante que não está carregando
+        console.log("fetchWishlistProductDetails chamada com IDs:", wishlistProductIds);
+
+        if (wishlistProductIds.length === 0) {
+            setWishlistItems([]);
+            setLoadingProducts(false);
+            console.log("Wishlist vazia, busca de detalhes pulada.");
             return;
         }
 
-        setLoadingProducts(true); // Inicia loading da busca de detalhes
+        if (loadingContext) {
+            console.log("Contexto da Wishlist ainda carregando, aguardando...");
+            setLoadingProducts(true);
+            return;
+        }
+
+        setLoadingProducts(true);
         try {
+            const idsToFetch = wishlistProductIds.slice(0, 30);
+            if (wishlistProductIds.length > 30) {
+                console.warn("A query 'in' do Firestore é limitada a 30 IDs. Exibindo apenas os primeiros 30 itens da wishlist.");
+            }
+
+            if (idsToFetch.length === 0) {
+                setWishlistItems([]);
+                setLoadingProducts(false);
+                return;
+            }
+
             const productsRef = collection(db, 'products');
-            const q = query(productsRef, where(documentId(), 'in', wishlistProductIds));
+            const q = query(productsRef, where(documentId(), 'in', idsToFetch));
 
             const querySnapshot = await getDocs(q);
             const items = querySnapshot.docs.map(doc => ({
@@ -39,8 +58,9 @@ export default function WishlistScreen() {
                 ...doc.data(),
             })) as Product[];
 
-            items.sort((a, b) => wishlistProductIds.indexOf(a.id) - wishlistProductIds.indexOf(b.id));
+            items.sort((a, b) => idsToFetch.indexOf(a.id) - idsToFetch.indexOf(b.id));
 
+            console.log("Detalhes dos produtos da wishlist buscados:", items.length);
             setWishlistItems(items);
 
         } catch (error) {
@@ -51,11 +71,9 @@ export default function WishlistScreen() {
         }
     }, [wishlistProductIds, loadingContext]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchWishlistProductDetails();
-        }, [fetchWishlistProductDetails])
-    );
+    useEffect(() => {
+        fetchWishlistProductDetails();
+    }, [fetchWishlistProductDetails]);
 
     const renderItem = ({ item }: { item: Product }) => (
         <ProductCard
@@ -64,13 +82,12 @@ export default function WishlistScreen() {
         />
     );
 
-    // Define os estilos dinamicamente com base no tema
     const styles = StyleSheet.create({
         container: {
             flex: 1,
             backgroundColor: colors.background,
         },
-        centerContent: { // Para loading e mensagem de vazio
+        centerContent: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
@@ -87,23 +104,14 @@ export default function WishlistScreen() {
             textAlign: 'center',
         },
         listContainer: {
-            paddingHorizontal: 8 / 2, // Mesma lógica de padding da ProductListScreen
+            paddingHorizontal: 8 / 2,
             paddingTop: 8,
             paddingBottom: 8,
         },
-        title: {
-            fontSize: 24,
-            fontWeight: 'bold',
-            color: colors.text,
-            padding: 15,
-            textAlign: 'center',
-            backgroundColor: colors.card,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-        },
     });
 
-    if (loadingContext || loadingProducts) {
+    const isLoading = loadingContext || loadingProducts;
+    if (isLoading) {
         return (
             <View style={styles.centerContent}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -114,19 +122,16 @@ export default function WishlistScreen() {
 
     return (
         <View style={styles.container}>
-            {/* O título agora virá do BottomTabNavigator */}
-            {/* <Text style={styles.title}>{t('wishlistTab')}</Text> */}
-
             {wishlistItems.length === 0 ? (
                 <View style={styles.centerContent}>
-                    <Text style={styles.emptyText}>Sua lista de desejos está vazia.</Text>
+                    <Text style={styles.emptyText}>{t('wishlistEmpty', 'Sua lista de desejos está vazia.')}</Text>
                 </View>
             ) : (
                 <FlatList
                     data={wishlistItems}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
-                    numColumns={2} // Usar 2 colunas como na lista principal
+                    numColumns={2}
                     contentContainerStyle={styles.listContainer}
                 />
             )}

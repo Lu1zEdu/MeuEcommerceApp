@@ -1,196 +1,328 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Button } from 'react-native'; // Adicionado ActivityIndicator
-import { RouteProp, useRoute, useFocusEffect, useNavigation } from '@react-navigation/native'; // Adicionado useFocusEffect
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'; // Para navegação
-import { Product, RootStackParamList } from '../types/navigation';
+// src/screens/ProductDetailScreen.tsx
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Image,
+    TouchableOpacity,
+    ScrollView,
+    Alert,
+    ActivityIndicator,
+    FlatList,
+    Dimensions,
+    Button,
+} from 'react-native';
+import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Product, RootStackParamList, ProductReview, ProductVariation } from '../types/navigation';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useWishlist } from '../context/WishlistContext';
 import { useTranslation } from 'react-i18next';
-import { db, doc, getDoc } from '../firebase/firebaseConfig'; // Para buscar produto individual
+import { db, doc, getDoc, collection, query, where, getDocs, Timestamp } from '../firebase/firebaseConfig';
+import ProductCard from '../components/ProductCard';
+import { PRODUCTS as LOCAL_PRODUCTS, EXAMPLE_REVIEWS } from '../data/products';
+import StarRating from '../components/StarRating';
+import { limit } from 'firebase/firestore/lite';
+import { documentId } from 'firebase/firestore';
 
 type ProductDetailRouteProp = RouteProp<RootStackParamList, 'ProductDetail'>;
-type ProductDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductDetail'>; // Para tipar navigation
+type ProductDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductDetail'>;
+
+const { width: screenWidth } = Dimensions.get('window');
+
+interface SelectedVariations {
+    [key: string]: string | undefined;
+}
 
 export default function ProductDetailScreen() {
     const route = useRoute<ProductDetailRouteProp>();
-    const navigation = useNavigation<ProductDetailNavigationProp>(); // Hook de navegação
+    const navigation = useNavigation<ProductDetailNavigationProp>();
     const { productId } = route.params;
     const { addToCart } = useCart();
     const { colors } = useTheme();
     const { isInWishlist, toggleWishlist, loadingWishlist } = useWishlist();
-    const { t } = useTranslation(); // Hook de tradução
+    const { t } = useTranslation();
 
-    const [product, setProduct] = useState<Product | null>(null); // Estado para o produto
-    const [loadingProduct, setLoadingProduct] = useState(true); // Estado de loading para busca no Firestore
+    const [product, setProduct] = useState<Product | null>(null);
+    const [loadingProduct, setLoadingProduct] = useState(true);
+    const [quantity, setQuantity] = useState(1);
+    const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
+    const [loadingSimilar, setLoadingSimilar] = useState(false);
+    const [reviews, setReviews] = useState<ProductReview[]>([]);
+    const [showAllReviews, setShowAllReviews] = useState(false);
+    const [selectedVariations, setSelectedVariations] = useState<SelectedVariations>({});
 
-    // Busca o produto específico no Firestore quando a tela carrega ou productId muda
+    const fetchSimilarProducts = useCallback(async (category: string, currentProductId: string) => {
+        if (!category) return;
+        setLoadingSimilar(true);
+        try {
+            const productsRef = collection(db, 'products');
+            const q = query(
+                productsRef,
+                where('category', '==', category),
+                where(documentId(), '!=', currentProductId),
+                limit(10)
+            );
+            const querySnapshot = await getDocs(q);
+            const similarList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+            setSimilarProducts(similarList);
+        } catch (error) { console.error("Erro ao buscar produtos similares:", error); }
+        finally { setLoadingSimilar(false); }
+    }, []);
+
     useEffect(() => {
         const fetchProduct = async () => {
             setLoadingProduct(true);
+            setProduct(null); setSimilarProducts([]); setQuantity(1); setReviews([]); setSelectedVariations({});
+            let foundProduct: Product | null = null;
             try {
                 const productRef = doc(db, 'products', productId);
                 const docSnap = await getDoc(productRef);
-
                 if (docSnap.exists()) {
-                    setProduct({ id: docSnap.id, ...docSnap.data() } as Product);
+                    foundProduct = { id: docSnap.id, ...docSnap.data() } as Product;
                 } else {
-                    console.warn("Produto não encontrado no Firestore:", productId);
-                    setProduct(null); // Define como null se não encontrar
-                    Alert.alert(t('alertErrorTitle'), "Produto não encontrado."); // Informa usuário
-                    // Opcional: navegar de volta navigation.goBack();
+                    const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId); //
+                    if (localProduct) foundProduct = localProduct;
+                    else Alert.alert(t('alertErrorTitle'), "Produto não encontrado.");
                 }
             } catch (error) {
-                console.error("Erro ao buscar detalhes do produto:", error);
-                setProduct(null);
-                Alert.alert(t('alertErrorTitle'), "Erro ao carregar detalhes do produto.");
+                console.error("Erro ao buscar detalhes (Firestore):", error);
+                const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId); //
+                if (localProduct) foundProduct = localProduct;
+                else Alert.alert(t('alertErrorTitle'), "Erro ao carregar detalhes do produto.");
             } finally {
+                setProduct(foundProduct);
                 setLoadingProduct(false);
+                if (foundProduct) {
+                    fetchSimilarProducts(foundProduct.category, foundProduct.id);
+                    const example = EXAMPLE_REVIEWS[foundProduct.id as keyof typeof EXAMPLE_REVIEWS];
+                    if (example) setReviews(example);
+                    const initialVariations: SelectedVariations = {};
+                    foundProduct.variations?.forEach(variation => {
+                        if (variation.options.length > 0) {
+                            initialVariations[variation.id] = variation.options[0].value;
+                        }
+                    });
+                    setSelectedVariations(initialVariations);
+                }
             }
         };
-
         fetchProduct();
-    }, [productId, t]); // Adiciona t como dependência para tradução dos alertas
+    }, [productId, t, fetchSimilarProducts]);
 
-    // Verifica se o produto atual está na wishlist (só executa se product não for null)
     const isFavorite = product ? isInWishlist(product.id) : false;
+    const hasDiscount = product?.originalPrice && product.originalPrice > product.price;
 
-    const handleAddToCart = () => {
-        if (product) {
-            addToCart(product);
-            // Usando interpolação para o nome do produto na mensagem
-            Alert.alert(t('alertSuccessTitle'), t('successAddedToCart', { productName: product.name }));
-        }
+    const finalPrice = useMemo(() => {
+        if (!product) return 0;
+        let price = product.price;
+        product.variations?.forEach(variation => {
+            const selectedValue = selectedVariations[variation.id];
+            const selectedOption = variation.options.find(opt => opt.value === selectedValue);
+            if (selectedOption?.priceModifier) {
+                price += selectedOption.priceModifier;
+            }
+        });
+        return price;
+    }, [product, selectedVariations]);
+
+    const finalOriginalPrice = useMemo(() => {
+        if (!product || !product.originalPrice) return undefined;
+        let originalPrice = product.originalPrice;
+        product.variations?.forEach(variation => {
+            const selectedValue = selectedVariations[variation.id];
+            const selectedOption = variation.options.find(opt => opt.value === selectedValue);
+            if (selectedOption?.priceModifier) {
+                originalPrice += selectedOption.priceModifier;
+            }
+        });
+        return originalPrice > finalPrice ? originalPrice : undefined;
+    }, [product, selectedVariations, finalPrice]);
+
+    const increaseQuantity = () => { setQuantity(prev => prev + 1); };
+    const decreaseQuantity = () => { setQuantity(prev => Math.max(1, prev - 1)); };
+    const handleAddToCart = () => { if (product) { addToCart(product, quantity); Alert.alert(t('alertSuccessTitle'), t('successAddedToCart', { productName: product.name })); } };
+    const handleToggleWishlist = () => { if (!product || loadingWishlist) return; toggleWishlist(product); };
+    const handleSelectVariation = (variationId: string, value: string) => { setSelectedVariations(prev => ({ ...prev, [variationId]: value })); };
+
+    const renderImageItem = ({ item }: { item: string }) => (<Image source={{ uri: item }} style={styles.galleryImage} resizeMode="cover" />);
+    const renderSimilarItem = ({ item }: { item: Product }) => (<View style={styles.similarItemContainer}><ProductCard product={item} onPress={() => navigation.push('ProductDetail', { productId: item.id })} /></View>);
+
+    const formatReviewDate = (date: ProductReview['createdAt']): string => {
+        if (!date) return '';
+        let d: Date;
+        if (date instanceof Date) { d = date; }
+        else if (date && typeof date === 'object' && 'seconds' in date) { d = new Date(date.seconds * 1000); }
+        else { return ''; }
+        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
     };
 
-    const handleToggleWishlist = () => {
-        if (!product || loadingWishlist) return;
-        toggleWishlist(product);
-    };
+    const renderReviewItem = ({ item }: { item: ProductReview }) => (
+        <View style={styles.reviewItem}>
+            <View style={styles.reviewHeader}>
+                <Text style={styles.reviewUserName}>{item.userName}</Text>
+                <StarRating rating={item.rating} size={14} color="#f0ad4e" />
+            </View>
+            <Text style={styles.reviewComment}>{item.comment}</Text>
+            {item.createdAt && <Text style={styles.reviewDate}>{formatReviewDate(item.createdAt)}</Text>}
+        </View>
+    );
 
-    // Estilos movidos para dentro para usar 'colors'
     const styles = StyleSheet.create({
-        container: {
-            flex: 1,
-            backgroundColor: colors.background,
-        },
-        loadingContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: colors.background,
-        },
-        loadingText: {
-            marginTop: 10,
-            fontSize: 16,
-            color: colors.textSecondary,
-        },
-        image: {
-            width: '100%',
-            height: 350, // Imagem um pouco maior
-            resizeMode: 'cover',
-            backgroundColor: colors.border,
-        },
-        detailsContainer: {
-            padding: 20,
-            backgroundColor: colors.card,
-            borderTopLeftRadius: 20, // Bordas mais arredondadas
-            borderTopRightRadius: 20,
-            marginTop: -20, // Puxa mais para cima
-            paddingBottom: 30, // Mais espaço embaixo
-        },
-        headerRow: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: 8, // Ajustado
-        },
-        name: {
-            flex: 1, // Permite que o nome quebre linha se necessário
-            fontSize: 24,
-            fontWeight: 'bold',
-            color: colors.text,
-            marginRight: 10, // Espaço antes do coração
-        },
-        wishlistButtonDetail: {
-            padding: 8,
-            marginTop: 4, // Alinha um pouco melhor com o texto
-        },
-        category: {
-            fontSize: 14,
-            color: colors.textSecondary,
-            marginBottom: 12,
-        },
-        price: {
-            fontSize: 22, // Preço um pouco maior
-            color: colors.primary,
-            fontWeight: 'bold',
-            marginBottom: 20,
-        },
-        description: {
-            fontSize: 16,
-            color: colors.textSecondary,
-            lineHeight: 24,
-            marginBottom: 30,
-        },
-        addButton: {
-            backgroundColor: colors.primary,
-            paddingVertical: 15,
-            borderRadius: 8,
-            alignItems: 'center',
-        },
-        addButtonText: {
-            color: colors.card,
-            fontSize: 16,
-            fontWeight: 'bold',
-        },
+        container: { flex: 1, backgroundColor: colors.background },
+        loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+        loadingText: { marginTop: 10, fontSize: 16, color: colors.textSecondary },
+        galleryContainer: { height: screenWidth * 0.9, marginBottom: 0, backgroundColor: colors.border },
+        galleryImage: { width: screenWidth, height: screenWidth * 0.9, backgroundColor: colors.border },
+        detailsContainer: { paddingHorizontal: 20, paddingTop: 20, backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, marginTop: -20, paddingBottom: 20 },
+        headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+        name: { flex: 1, fontSize: 24, fontWeight: 'bold', color: colors.text, marginRight: 10 },
+        wishlistButtonDetail: { padding: 8, marginTop: 4 },
+        category: { fontSize: 14, color: colors.textSecondary, marginBottom: 5 },
+        brand: { fontSize: 14, color: colors.textSecondary, marginBottom: 12, fontWeight: '500' },
+        ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+        reviewCountText: { marginLeft: 8, fontSize: 14, color: colors.textSecondary },
+        priceContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' },
+        price: { fontSize: 22, color: colors.primary, fontWeight: 'bold' },
+        originalPrice: { fontSize: 16, color: colors.textSecondary, textDecorationLine: 'line-through', marginLeft: 10 },
+        variationsContainer: { marginBottom: 20 },
+        variationGroup: { marginBottom: 15 },
+        variationName: { fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 10 },
+        optionsContainer: { flexDirection: 'row', flexWrap: 'wrap' },
+        optionButton: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 10, marginBottom: 10, backgroundColor: colors.background },
+        optionButtonSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
+        optionText: { fontSize: 14, color: colors.textSecondary },
+        optionTextSelected: { color: colors.card, fontWeight: 'bold' },
+        descriptionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 8, marginTop: 10 },
+        description: { fontSize: 15, color: colors.textSecondary, lineHeight: 22, marginBottom: 30 },
+        quantitySelectorContainer: { marginBottom: 30 },
+        quantitySelector: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 8 },
+        quantityButton: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: colors.background, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
+        quantityButtonText: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+        quantityValue: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, minWidth: 30, textAlign: 'center', color: colors.text },
+        addButton: { backgroundColor: colors.primary, paddingVertical: 15, borderRadius: 8, alignItems: 'center', marginBottom: 30 },
+        addButtonDisabled: { backgroundColor: colors.textSecondary },
+        addButtonText: { color: colors.card, fontSize: 16, fontWeight: 'bold' },
+        sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 15, paddingHorizontal: 20, marginTop: 10 },
+        reviewsSection: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, marginHorizontal: -20, paddingHorizontal: 20 },
+        similarSection: { paddingTop: 20, borderTopWidth: 1, borderTopColor: colors.border, marginHorizontal: -20, paddingBottom: 20 },
+        placeholderText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 10 },
+        similarListContainer: { paddingLeft: 20, paddingRight: 10 },
+        reviewItem: { backgroundColor: colors.background, padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+        reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+        reviewUserName: { fontSize: 15, fontWeight: 'bold', color: colors.text },
+        reviewComment: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 8 },
+        reviewDate: { fontSize: 12, color: colors.textSecondary, textAlign: 'right' },
+        readMoreButton: { marginTop: 10, alignSelf: 'center', paddingVertical: 5 },
+        readMoreText: { color: colors.primary, fontWeight: 'bold' },
+        similarItemContainer: { marginRight: 10, width: Dimensions.get('window').width * 0.45 },
     });
 
-    // Se ainda estiver carregando os dados do produto
-    if (loadingProduct) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Carregando detalhes...</Text>
-            </View>
-        );
-    }
+    if (loadingProduct) { return (<View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Carregando detalhes...</Text></View>); }
+    if (!product) { return (<View style={styles.loadingContainer}><Text style={styles.loadingText}>Produto não encontrado!</Text><Button title="Voltar" onPress={() => navigation.goBack()} color={colors.primary} /></View>); }
 
-    if (!product) {
-        return (
-            <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Produto não encontrado!</Text>
-                <Button title="Voltar" onPress={() => navigation.goBack()} color={colors.primary} />
-            </View>
-        );
-    }
+    const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 3);
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}>
-            <Image source={{ uri: product.imageUrl }} style={styles.image} />
+            {product.imageUrls && product.imageUrls.length > 0 ? (
+                <FlatList data={product.imageUrls} renderItem={renderImageItem} keyExtractor={(item, index) => `${productId}-img-${index}`} horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.galleryContainer} />
+            ) : (
+                <View style={[styles.galleryContainer, { justifyContent: 'center', alignItems: 'center' }]}><Ionicons name="image-outline" size={80} color={colors.textSecondary} /></View>
+            )}
+
             <View style={styles.detailsContainer}>
                 <View style={styles.headerRow}>
                     <Text style={styles.name}>{product.name}</Text>
-                    <TouchableOpacity
-                        style={styles.wishlistButtonDetail}
-                        onPress={handleToggleWishlist}
-                    >
-                        <Ionicons
-                            name={isFavorite ? "heart" : "heart-outline"}
-                            size={30}
-                            color={isFavorite ? colors.notification : colors.textSecondary}
-                        />
+                    <TouchableOpacity style={styles.wishlistButtonDetail} onPress={handleToggleWishlist}>
+                        <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={30} color={isFavorite ? colors.notification : colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
 
-                <Text style={styles.category}>{t('categoryLabel')} {product.category}</Text>
-                <Text style={styles.price}>R$ {product.price.toFixed(2)}</Text>
+                {product.brand && <Text style={styles.brand}>{product.brand}</Text>}
+                {/* CORREÇÃO TEXTO */}
+                <Text style={styles.category}><Text>{t('categoryLabel')}</Text> {product.category}</Text>
+
+                {product.averageRating !== undefined && product.reviewCount !== undefined && product.reviewCount > 0 && (
+                    <View style={styles.ratingContainer}>
+                        <StarRating rating={product.averageRating} size={18} />
+                        <Text style={styles.reviewCountText}>({product.reviewCount} {t(product.reviewCount === 1 ? 'review_one' : 'review_other', { count: product.reviewCount })})</Text>
+                    </View>
+                )}
+
+                <View style={styles.priceContainer}>
+                    {/* CORREÇÃO TEXTO */}
+                    <Text style={styles.price}>{(product.currency === 'BRL' ? 'R$ ' : '') + finalPrice.toFixed(2)}</Text>
+                    {finalOriginalPrice && (<Text style={styles.originalPrice}>{(product.currency === 'BRL' ? 'R$ ' : '') + finalOriginalPrice.toFixed(2)}</Text>)}
+                </View>
+
+                {product.variations && product.variations.length > 0 && (
+                    <View style={styles.variationsContainer}>
+                        {product.variations.map((variation) => (
+                            <View key={variation.id} style={styles.variationGroup}>
+                                {/* CORREÇÃO TEXTO */}
+                                <Text style={styles.variationName}>{variation.name}: <Text style={{ fontWeight: 'normal' }}>{selectedVariations[variation.id]}</Text></Text>
+                                <View style={styles.optionsContainer}>
+                                    {variation.options.map((option) => {
+                                        const isSelected = selectedVariations[variation.id] === option.value;
+                                        return (
+                                            <TouchableOpacity key={option.value} style={[styles.optionButton, isSelected && styles.optionButtonSelected]} onPress={() => handleSelectVariation(variation.id, option.value)}>
+                                                <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>{option.value}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* CORREÇÃO TEXTO */}
+                <Text style={styles.descriptionTitle}><Text>Descrição</Text></Text>
                 <Text style={styles.description}>{product.description}</Text>
-                <TouchableOpacity style={styles.addButton} onPress={handleAddToCart}>
-                    <Text style={styles.addButtonText}>{t('addToCartButton')}</Text>
+
+                <View style={styles.quantitySelectorContainer}>
+                    {/* CORREÇÃO TEXTO */}
+                    <Text style={styles.descriptionTitle}><Text>Quantidade</Text></Text>
+                    <View style={styles.quantitySelector}>
+                        <TouchableOpacity style={styles.quantityButton} onPress={decreaseQuantity} disabled={quantity <= 1}><Text style={styles.quantityButtonText}>-</Text></TouchableOpacity>
+                        <Text style={styles.quantityValue}>{quantity}</Text>
+                        <TouchableOpacity style={styles.quantityButton} onPress={increaseQuantity}><Text style={styles.quantityButtonText}>+</Text></TouchableOpacity>
+                        {product.stock === 0 && <Text style={{ marginLeft: 15, color: colors.notification, fontSize: 14 }}>Indisponível</Text>}
+                        {product.stock > 0 && product.stock <= 5 && <Text style={{ marginLeft: 15, color: colors.notification, fontSize: 14 }}>Apenas {product.stock} em estoque!</Text>}
+                    </View>
+                </View>
+
+                <TouchableOpacity style={[styles.addButton, product.stock === 0 && styles.addButtonDisabled]} onPress={handleAddToCart} disabled={product.stock === 0}>
+                    <Text style={styles.addButtonText}>{product.stock === 0 ? "Produto Indisponível" : t('addToCartButton')}</Text>
                 </TouchableOpacity>
             </View>
+
+            <View style={styles.reviewsSection}>
+                {/* CORREÇÃO TEXTO */}
+                <Text style={styles.sectionTitle}><Text>Avaliações ({product.reviewCount || 0})</Text></Text>
+                {reviews.length > 0 ? (
+                    <>
+                        <FlatList data={visibleReviews} renderItem={renderReviewItem} keyExtractor={(item) => item.id} scrollEnabled={false} />
+                        {reviews.length > 3 && (
+                            <TouchableOpacity style={styles.readMoreButton} onPress={() => setShowAllReviews(!showAllReviews)}>
+                                <Text style={styles.readMoreText}>{showAllReviews ? "Mostrar menos" : "Ler todas as avaliações"}</Text>
+                            </TouchableOpacity>
+                        )}
+                    </>
+                ) : (<Text style={styles.placeholderText}>Nenhuma avaliação ainda.</Text>)}
+            </View>
+
+            {loadingSimilar ? (<ActivityIndicator style={{ marginVertical: 20 }} color={colors.primary} />
+            ) : similarProducts.length > 0 ? (
+                <View style={styles.similarSection}>
+                    <Text style={styles.sectionTitle}><Text>Produtos Similares</Text></Text>
+                    <FlatList data={similarProducts} renderItem={renderSimilarItem} keyExtractor={(item) => item.id} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarListContainer} />
+                </View>
+            ) : null}
         </ScrollView>
     );
 }

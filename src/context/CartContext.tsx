@@ -1,6 +1,6 @@
-// src/context/CartContext.tsx
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { Product } from '../types/navigation';
+import { useTranslation } from 'react-i18next'; // Para logs traduzidos (opcional)
 
 export interface CartItem extends Product {
     quantity: number;
@@ -8,12 +8,13 @@ export interface CartItem extends Product {
 
 interface CartContextData {
     items: CartItem[];
-    addToCart: (product: Product) => void;
+    addToCart: (product: Product, quantity?: number) => void;
     removeFromCart: (productId: string) => void;
     increaseQuantity: (productId: string) => void;
     decreaseQuantity: (productId: string) => void;
     getTotalItems: () => number;
     getTotalPrice: () => number;
+    clearCart: () => void;
 }
 
 const CartContext = createContext<CartContextData | undefined>(undefined);
@@ -24,23 +25,34 @@ interface CartProviderProps {
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     const [items, setItems] = useState<CartItem[]>([]);
+    const { t } = useTranslation();
 
-    const addToCart = (product: Product) => {
+    const addToCart = (product: Product, quantity: number = 1) => {
+        if (quantity <= 0 || !Number.isInteger(quantity)) {
+            console.warn("Attempted to add invalid quantity:", quantity);
+            return;
+        }
+        if (!product || !product.id || !product.price) {
+            console.error("Attempted to add invalid product:", product);
+            return;
+        }
+
+
         setItems(prevItems => {
             const existingItem = prevItems.find(item => item.id === product.id);
             if (existingItem) {
-                // Se o item já existe, incrementa a quantidade
+                console.log(`Atualizando quantidade para ${product.name}: ${existingItem.quantity} + ${quantity}`);
                 return prevItems.map(item =>
                     item.id === product.id
-                        ? { ...item, quantity: item.quantity + 1 }
+                        ? { ...item, quantity: item.quantity + quantity }
                         : item
                 );
             } else {
-                // Se é um novo item, adiciona com quantidade 1
-                return [...prevItems, { ...product, quantity: 1 }];
+                console.log(`Adicionando novo item ${product.name} com quantidade ${quantity}`);
+                return [...prevItems, { ...product, quantity: quantity }];
             }
         });
-        console.log('Adicionado ao carrinho via Context:', product.name, 'Itens atuais:', items);
+        console.log(`Adicionado ${quantity} de ${product.name}. Total no carrinho:`, getTotalItems());
     };
 
     const removeFromCart = (productId: string) => {
@@ -60,17 +72,27 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     const decreaseQuantity = (productId: string) => {
         setItems(prevItems => {
-            const existingItem = prevItems.find(item => item.id === productId);
-            // Se a quantidade for 1, remove o item; senão, decrementa
-            if (existingItem && existingItem.quantity === 1) {
-                return prevItems.filter(item => item.id !== productId);
-            } else {
-                return prevItems.map(item =>
-                    item.id === productId
-                        ? { ...item, quantity: item.quantity - 1 }
-                        : item
-                );
-            }
+            const updatedItems = prevItems.map(item => {
+                if (item.id === productId) {
+                    return { ...item, quantity: Math.max(1, item.quantity - 1) };
+                }
+                return item;
+            });
+            // Opcional: Remover se a quantidade chegar a 0 (embora a lógica acima previna isso)
+            // return updatedItems.filter(item => item.quantity > 0);
+            return updatedItems;
+
+            // Lógica anterior que removia o item se a quantidade fosse 1:
+            // const existingItem = prevItems.find(item => item.id === productId);
+            // if (existingItem && existingItem.quantity === 1) {
+            //     return prevItems.filter(item => item.id !== productId);
+            // } else {
+            //     return prevItems.map(item =>
+            //         item.id === productId
+            //             ? { ...item, quantity: item.quantity - 1 }
+            //             : item
+            //     );
+            // }
         });
     };
 
@@ -79,7 +101,16 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     };
 
     const getTotalPrice = (): number => {
-        return items.reduce((total, item) => total + item.price * item.quantity, 0);
+        return items.reduce((total, item) => {
+            const price = Number(item.price) || 0;
+            const quantity = Number(item.quantity) || 0;
+            return total + price * quantity;
+        }, 0);
+    };
+
+    const clearCart = () => {
+        setItems([]);
+        console.log("Carrinho limpo.");
     };
 
     const contextValue: CartContextData = {
@@ -90,6 +121,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         decreaseQuantity,
         getTotalItems,
         getTotalPrice,
+        clearCart,
     };
 
     return (

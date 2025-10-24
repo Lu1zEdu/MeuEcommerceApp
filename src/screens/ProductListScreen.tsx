@@ -1,23 +1,14 @@
-// src/screens/ProductListScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View,
-    Text,
-    FlatList,
-    StyleSheet,
-    ActivityIndicator,
-    Alert,
-    TouchableOpacity, // Precisa para o botão de logout dentro do header (se mantiver)
-} from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, RootStackParamList } from '../types/navigation';
 import { auth, db, collection, getDocs } from '../firebase/firebaseConfig';
-import { signOut } from 'firebase/auth'; // Import signOut se for usar o botão aqui
+import { signOut } from 'firebase/auth';
 import ProductCard from '../components/ProductCard';
 import { PRODUCTS as LOCAL_PRODUCTS } from '../data/products';
 import HomeHeader from '../components/HomeHeader';
-import { useTheme } from '../context/ThemeContext'; // 1. Importar useTheme
+import { useTheme } from '../context/ThemeContext';
 
 type ProductListNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductList'>;
 
@@ -26,12 +17,11 @@ const itemMargin = 8;
 
 export default function ProductListScreen() {
     const navigation = useNavigation<ProductListNavigationProp>();
-    const { colors } = useTheme(); // 2. Obter cores
+    const { colors } = useTheme();
     const [products, setProducts] = useState<Product[]>(LOCAL_PRODUCTS);
     const [loading, setLoading] = useState(false);
     const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-    // Buscar produtos do Firestore (código inalterado)
     useFocusEffect(
         useCallback(() => {
             let isMounted = true;
@@ -39,7 +29,6 @@ export default function ProductListScreen() {
                 setLoading(true);
                 setFirestoreError(null);
                 try {
-                    // ... (lógica de busca no firestore - sem alterações visuais) ...
                     const productsCol = collection(db, 'products');
                     const productSnapshot = await getDocs(productsCol);
                     const firestoreProductList = productSnapshot.docs.map(doc => ({
@@ -84,22 +73,22 @@ export default function ProductListScreen() {
     const styles = StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: colors.background, // Usar cor do tema
+            backgroundColor: colors.background,
         },
         centerContent: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
             padding: 20,
-            backgroundColor: colors.background, // Usar cor do tema
+            backgroundColor: colors.background,
         },
         loadingOverlay: {
             position: 'absolute',
             left: 0,
             right: 0,
-            top: 0, // Cobrir header também
+            top: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.3)', // Fundo escuro semitransparente
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 10,
@@ -107,25 +96,25 @@ export default function ProductListScreen() {
         loadingText: {
             marginTop: 20,
             fontSize: 16,
-            color: '#FFFFFF', // Texto branco no overlay escuro
+            color: '#FFFFFF',
             fontWeight: 'bold',
         },
         errorContainer: {
             padding: 10,
-            backgroundColor: colors.notification, // Usar cor de notificação (vermelho)
+            backgroundColor: colors.notification,
             margin: itemMargin,
             borderRadius: 5,
             borderWidth: 1,
-            borderColor: colors.border, // Borda sutil
+            borderColor: colors.border,
         },
         errorText: {
-            color: colors.card, // Texto contrastante (branco no vermelho)
+            color: colors.card,
             textAlign: 'center',
             fontWeight: 'bold',
         },
         emptyText: {
             fontSize: 16,
-            color: colors.textSecondary, // Usar cor do tema
+            color: colors.textSecondary,
             textAlign: 'center',
         },
         listContainer: {
@@ -139,7 +128,6 @@ export default function ProductListScreen() {
         <View style={styles.container}>
             <HomeHeader />
 
-            {/* Indicador de Loading */}
             {loading && (
                 <View style={styles.loadingOverlay}>
                     <ActivityIndicator size="large" color="#FFFFFF" />
@@ -147,14 +135,12 @@ export default function ProductListScreen() {
                 </View>
             )}
 
-            {/* Mensagem de Erro do Firestore */}
             {firestoreError && !loading && (
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{firestoreError}</Text>
                 </View>
             )}
 
-            {/* Lista de Produtos */}
             {products.length === 0 && !loading ? (
                 <View style={styles.centerContent}>
                     <Text style={styles.emptyText}>Nenhum produto para exibir.</Text>

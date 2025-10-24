@@ -1,4 +1,7 @@
 import { Timestamp } from '../firebase/firebaseConfig';
+import { CartItem } from '../context/CartContext';
+
+export type SelectedVariationsType = { [key: string]: string };
 
 export type RootStackParamList = {
     Login: undefined;
@@ -6,7 +9,15 @@ export type RootStackParamList = {
     ProductList: undefined;
     ProductDetail: { productId: string };
     Cart: undefined;
-    MainApp: undefined;
+    MainApp: { screen?: keyof BottomTabParamList; params?: any };
+};
+
+export type BottomTabParamList = {
+    Home: undefined;
+    Wishlist: undefined;
+    Transaction: undefined;
+    Notification: undefined;
+    Profile: undefined;
 };
 
 export interface ProductVariationOption {
@@ -21,7 +32,6 @@ export interface ProductVariation {
     name: string;
     options: ProductVariationOption[];
 }
-
 
 export interface ProductReview {
     id: string;
@@ -43,6 +53,7 @@ export type Product = {
     price: number;
     originalPrice?: number;
     currency: string;
+    imageUrl?: string;
     imageUrls: string[];
     stock: number;
     variations?: ProductVariation[];
@@ -55,3 +66,26 @@ export type Product = {
     isFeatured?: boolean;
     isActive?: boolean;
 };
+
+export interface OrderItem extends Omit<CartItem, 'cartItemId'> {
+}
+
+export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+
+export interface Order {
+    id?: string;
+    userId: string;
+    items: OrderItem[];
+    totalPrice: number;
+    status: OrderStatus;
+    createdAt: Timestamp | Date;
+}
+
+export interface NotificationData {
+    id: string;
+    date: Date;
+    title: string;
+    body: string;
+    data?: Record<string, any>;
+    read: boolean;
+}

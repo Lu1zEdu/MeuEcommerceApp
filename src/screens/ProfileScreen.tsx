@@ -1,30 +1,27 @@
-// src/screens/ProfileScreen.tsx
 import React from 'react';
-import { View, Text, StyleSheet, Button, Image, Alert, Switch, TouchableOpacity } from 'react-native'; // Adicionado TouchableOpacity
+import { View, Text, StyleSheet, Button, Image, Alert, Switch, TouchableOpacity } from 'react-native';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from 'react-i18next'; // 1. Importar
+import { useTranslation } from 'react-i18next';
 
 const defaultProfilePic = 'https://via.placeholder.com/150/CCCCCC/FFFFFF?text=User';
 
 export default function ProfileScreen() {
     const { colors, isDarkTheme, toggleTheme } = useTheme();
-    const { t, i18n } = useTranslation(); // 2. Obter t e i18n
+    const { t, i18n } = useTranslation();
     const user = auth.currentUser;
-    const currentLanguage = i18n.language; // Pega o idioma atual ('pt' ou 'en')
+    const currentLanguage = i18n.language;
 
     const handleLogout = async () => {
-        // ... (logout inalterado) ...
         try { await signOut(auth); } catch (error: any) { Alert.alert(t('alertErrorTitle'), t('errorLogoutFailed')); }
     };
 
-    // 3. Função para mudar o idioma
     const changeLanguage = (lang: 'pt' | 'en') => {
         i18n.changeLanguage(lang);
     };
 
-    const styles = StyleSheet.create({ /* ... Estilos dinâmicos usando colors ... */
+    const styles = StyleSheet.create({
         container: { flex: 1, alignItems: 'center', paddingTop: 40, backgroundColor: colors.background, paddingHorizontal: 20 },
         profileImage: { width: 120, height: 120, borderRadius: 60, marginBottom: 20, backgroundColor: colors.border },
         userName: { fontSize: 22, fontWeight: 'bold', color: colors.text, marginBottom: 8 },
@@ -32,7 +29,7 @@ export default function ProfileScreen() {
         buttonContainer: { width: '80%', marginBottom: 20 },
         themeToggleContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '80%', marginTop: 20, marginBottom: 10, paddingVertical: 10, paddingHorizontal: 15, backgroundColor: colors.card, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
         themeToggleText: { fontSize: 16, color: colors.text },
-        languageContainer: { // Container para botões de idioma
+        languageContainer: {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',

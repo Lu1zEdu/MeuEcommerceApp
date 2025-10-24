@@ -1,41 +1,22 @@
-// src/screens/ProductDetailScreen.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Image,
-    TouchableOpacity,
-    ScrollView,
-    Alert,
-    ActivityIndicator,
-    FlatList,
-    Dimensions,
-    Button,
-} from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, Dimensions, Button } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Product, RootStackParamList, ProductReview, ProductVariation } from '../types/navigation';
+import { Product, RootStackParamList, ProductReview, SelectedVariationsType } from '../types/navigation';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useWishlist } from '../context/WishlistContext';
 import { useTranslation } from 'react-i18next';
-import { db, doc, getDoc, collection, query, where, getDocs, Timestamp } from '../firebase/firebaseConfig';
+import { db, doc, getDoc, collection, query, where, getDocs, Timestamp, limit, documentId } from '../firebase/firebaseConfig';
 import ProductCard from '../components/ProductCard';
 import { PRODUCTS as LOCAL_PRODUCTS, EXAMPLE_REVIEWS } from '../data/products';
 import StarRating from '../components/StarRating';
-import { limit } from 'firebase/firestore/lite';
-import { documentId } from 'firebase/firestore';
 
 type ProductDetailRouteProp = RouteProp<RootStackParamList, 'ProductDetail'>;
 type ProductDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductDetail'>;
 
 const { width: screenWidth } = Dimensions.get('window');
-
-interface SelectedVariations {
-    [key: string]: string | undefined;
-}
 
 export default function ProductDetailScreen() {
     const route = useRoute<ProductDetailRouteProp>();
@@ -53,7 +34,7 @@ export default function ProductDetailScreen() {
     const [loadingSimilar, setLoadingSimilar] = useState(false);
     const [reviews, setReviews] = useState<ProductReview[]>([]);
     const [showAllReviews, setShowAllReviews] = useState(false);
-    const [selectedVariations, setSelectedVariations] = useState<SelectedVariations>({});
+    const [selectedVariations, setSelectedVariations] = useState<SelectedVariationsType>({});
 
     const fetchSimilarProducts = useCallback(async (category: string, currentProductId: string) => {
         if (!category) return;
@@ -84,37 +65,37 @@ export default function ProductDetailScreen() {
                 if (docSnap.exists()) {
                     foundProduct = { id: docSnap.id, ...docSnap.data() } as Product;
                 } else {
-                    const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId); //
+                    const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId);
                     if (localProduct) foundProduct = localProduct;
                     else Alert.alert(t('alertErrorTitle'), "Produto não encontrado.");
                 }
             } catch (error) {
                 console.error("Erro ao buscar detalhes (Firestore):", error);
-                const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId); //
+                const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId);
                 if (localProduct) foundProduct = localProduct;
                 else Alert.alert(t('alertErrorTitle'), "Erro ao carregar detalhes do produto.");
             } finally {
-                setProduct(foundProduct);
-                setLoadingProduct(false);
                 if (foundProduct) {
-                    fetchSimilarProducts(foundProduct.category, foundProduct.id);
-                    const example = EXAMPLE_REVIEWS[foundProduct.id as keyof typeof EXAMPLE_REVIEWS];
-                    if (example) setReviews(example);
-                    const initialVariations: SelectedVariations = {};
+                    const initialVariations: SelectedVariationsType = {};
                     foundProduct.variations?.forEach(variation => {
-                        if (variation.options.length > 0) {
+                        if (variation.options && variation.options.length > 0) {
                             initialVariations[variation.id] = variation.options[0].value;
                         }
                     });
                     setSelectedVariations(initialVariations);
+                    setProduct(foundProduct);
+                    fetchSimilarProducts(foundProduct.category, foundProduct.id);
+                    const example = EXAMPLE_REVIEWS[foundProduct.id as keyof typeof EXAMPLE_REVIEWS];
+                    if (example) setReviews(example);
                 }
+                setLoadingProduct(false);
             }
         };
         fetchProduct();
     }, [productId, t, fetchSimilarProducts]);
 
+
     const isFavorite = product ? isInWishlist(product.id) : false;
-    const hasDiscount = product?.originalPrice && product.originalPrice > product.price;
 
     const finalPrice = useMemo(() => {
         if (!product) return 0;
@@ -142,9 +123,20 @@ export default function ProductDetailScreen() {
         return originalPrice > finalPrice ? originalPrice : undefined;
     }, [product, selectedVariations, finalPrice]);
 
+
     const increaseQuantity = () => { setQuantity(prev => prev + 1); };
     const decreaseQuantity = () => { setQuantity(prev => Math.max(1, prev - 1)); };
-    const handleAddToCart = () => { if (product) { addToCart(product, quantity); Alert.alert(t('alertSuccessTitle'), t('successAddedToCart', { productName: product.name })); } };
+    const handleAddToCart = () => {
+        if (product) {
+            const allVariationsSelected = product.variations?.every(v => selectedVariations[v.id] !== undefined) ?? true;
+            if (!allVariationsSelected) {
+                Alert.alert(t('alertErrorTitle'), 'Por favor, selecione todas as opções do produto.');
+                return;
+            }
+            addToCart(product, quantity, selectedVariations, finalPrice);
+            Alert.alert(t('alertSuccessTitle'), t('successAddedToCart', { productName: product.name }));
+        }
+    };
     const handleToggleWishlist = () => { if (!product || loadingWishlist) return; toggleWishlist(product); };
     const handleSelectVariation = (variationId: string, value: string) => { setSelectedVariations(prev => ({ ...prev, [variationId]: value })); };
 
@@ -243,8 +235,7 @@ export default function ProductDetailScreen() {
                 </View>
 
                 {product.brand && <Text style={styles.brand}>{product.brand}</Text>}
-                {/* CORREÇÃO TEXTO */}
-                <Text style={styles.category}><Text>{t('categoryLabel')}</Text> {product.category}</Text>
+                <Text style={styles.category}>{t('categoryLabel')} {product.category}</Text>
 
                 {product.averageRating !== undefined && product.reviewCount !== undefined && product.reviewCount > 0 && (
                     <View style={styles.ratingContainer}>
@@ -254,7 +245,6 @@ export default function ProductDetailScreen() {
                 )}
 
                 <View style={styles.priceContainer}>
-                    {/* CORREÇÃO TEXTO */}
                     <Text style={styles.price}>{(product.currency === 'BRL' ? 'R$ ' : '') + finalPrice.toFixed(2)}</Text>
                     {finalOriginalPrice && (<Text style={styles.originalPrice}>{(product.currency === 'BRL' ? 'R$ ' : '') + finalOriginalPrice.toFixed(2)}</Text>)}
                 </View>
@@ -263,8 +253,7 @@ export default function ProductDetailScreen() {
                     <View style={styles.variationsContainer}>
                         {product.variations.map((variation) => (
                             <View key={variation.id} style={styles.variationGroup}>
-                                {/* CORREÇÃO TEXTO */}
-                                <Text style={styles.variationName}>{variation.name}: <Text style={{ fontWeight: 'normal' }}>{selectedVariations[variation.id]}</Text></Text>
+                                <Text style={styles.variationName}>{variation.name}: <Text style={{ fontWeight: 'normal' }}>{selectedVariations[variation.id] || 'Selecione'}</Text></Text>
                                 <View style={styles.optionsContainer}>
                                     {variation.options.map((option) => {
                                         const isSelected = selectedVariations[variation.id] === option.value;
@@ -280,13 +269,11 @@ export default function ProductDetailScreen() {
                     </View>
                 )}
 
-                {/* CORREÇÃO TEXTO */}
-                <Text style={styles.descriptionTitle}><Text>Descrição</Text></Text>
+                <Text style={styles.descriptionTitle}>Descrição</Text>
                 <Text style={styles.description}>{product.description}</Text>
 
                 <View style={styles.quantitySelectorContainer}>
-                    {/* CORREÇÃO TEXTO */}
-                    <Text style={styles.descriptionTitle}><Text>Quantidade</Text></Text>
+                    <Text style={styles.descriptionTitle}>Quantidade</Text>
                     <View style={styles.quantitySelector}>
                         <TouchableOpacity style={styles.quantityButton} onPress={decreaseQuantity} disabled={quantity <= 1}><Text style={styles.quantityButtonText}>-</Text></TouchableOpacity>
                         <Text style={styles.quantityValue}>{quantity}</Text>
@@ -302,8 +289,7 @@ export default function ProductDetailScreen() {
             </View>
 
             <View style={styles.reviewsSection}>
-                {/* CORREÇÃO TEXTO */}
-                <Text style={styles.sectionTitle}><Text>Avaliações ({product.reviewCount || 0})</Text></Text>
+                <Text style={styles.sectionTitle}>Avaliações ({product.reviewCount || 0})</Text>
                 {reviews.length > 0 ? (
                     <>
                         <FlatList data={visibleReviews} renderItem={renderReviewItem} keyExtractor={(item) => item.id} scrollEnabled={false} />
@@ -319,7 +305,7 @@ export default function ProductDetailScreen() {
             {loadingSimilar ? (<ActivityIndicator style={{ marginVertical: 20 }} color={colors.primary} />
             ) : similarProducts.length > 0 ? (
                 <View style={styles.similarSection}>
-                    <Text style={styles.sectionTitle}><Text>Produtos Similares</Text></Text>
+                    <Text style={styles.sectionTitle}>Produtos Similares</Text>
                     <FlatList data={similarProducts} renderItem={renderSimilarItem} keyExtractor={(item) => item.id} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarListContainer} />
                 </View>
             ) : null}

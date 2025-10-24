@@ -1,4 +1,3 @@
-// src/screens/LoginScreen.tsx
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -36,34 +35,34 @@ export default function LoginScreen() {
     const styles = StyleSheet.create({
         scrollContainer: {
             flexGrow: 1,
-            justifyContent: 'center', // Centraliza o conteúdo dentro do ScrollView
+            justifyContent: 'center',
         },
         container: {
-            // flex: 1, // Removido
+            flex: 1,
             justifyContent: 'center',
             padding: 20,
-            backgroundColor: colors.background, // Cor do tema
+            backgroundColor: colors.background
         },
         title: {
-            fontSize: 32, // Maior
+            fontSize: 32,
             fontWeight: 'bold',
-            marginBottom: 30, // Mais espaço
+            marginBottom: 30,
             textAlign: 'center',
-            color: colors.primary, // Cor primária no título
+            color: colors.primary,
         },
         input: {
             height: 50,
-            borderColor: colors.border, // Cor do tema
+            borderColor: colors.border,
             borderWidth: 1,
             marginBottom: 15,
             paddingHorizontal: 15,
             borderRadius: 8,
             fontSize: 16,
-            backgroundColor: colors.card, // Cor do tema
-            color: colors.text, // Cor do texto digitado
+            backgroundColor: colors.card,
+            color: colors.text,
         },
         button: {
-            backgroundColor: colors.primary, // Cor do tema
+            backgroundColor: colors.primary,
             paddingVertical: 15,
             borderRadius: 8,
             alignItems: 'center',
@@ -71,12 +70,12 @@ export default function LoginScreen() {
             marginTop: 10,
         },
         buttonText: {
-            color: colors.card, // Texto contrastante (branco)
+            color: colors.card,
             fontSize: 16,
             fontWeight: 'bold',
         },
         linkText: {
-            color: colors.primary, // Cor do tema
+            color: colors.primary,
             textAlign: 'center',
             fontSize: 16,
         }
@@ -86,7 +85,6 @@ export default function LoginScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} >
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.container}>
-                    {/* 3. Usar t() para textos visíveis */}
                     <Text style={styles.title}>{t('loginTitle')}</Text>
                     <TextInput
                         style={styles.input}

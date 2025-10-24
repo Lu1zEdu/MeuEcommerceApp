@@ -5,10 +5,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
 import { useWishlist } from '../context/WishlistContext';
 import { Product, RootStackParamList } from '../types/navigation';
-import { db, collection, getDocs, query, where } from '../firebase/firebaseConfig';
+import { db, doc, getDoc, collection, query, where, getDocs, Timestamp, limit, documentId } from '../firebase/firebaseConfig';
 import ProductCard from '../components/ProductCard';
 import { useTranslation } from 'react-i18next';
-import { documentId } from 'firebase/firestore';
 
 type WishlistScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Wishlist'>;
 

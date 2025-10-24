@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, serverTimestamp, Timestamp, limit, documentId, orderBy } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { getReactNativePersistence } = require('firebase/auth') as any
@@ -37,7 +37,10 @@ export {
     deleteDoc,
     query,
     where,
+    limit,
+    documentId,
     onSnapshot,
     serverTimestamp,
+    orderBy,
     Timestamp
 };

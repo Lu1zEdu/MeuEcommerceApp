@@ -7,26 +7,21 @@ import WishlistScreen from '../screens/WishlistScreen';
 import TransactionScreen from '../screens/TransactionScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-
-export type BottomTabParamList = {
-    Home: undefined;
-    Wishlist: undefined;
-    Transaction: undefined;
-    Notification: undefined;
-    Profile: undefined;
-};
+import { BottomTabParamList } from '../types/navigation';
+import { useTranslation } from 'react-i18next';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 export default function BottomTabNavigator() {
-    const { colors } = useTheme(); // 2. Obter cores
+    const { colors } = useTheme();
+    const { t } = useTranslation();
 
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName: React.ComponentProps<typeof Ionicons>['name'];
-                    // ... (lógica dos ícones inalterada) ...
+
                     switch (route.name) {
                         case 'Home':
                             iconName = focused ? 'home' : 'home-outline';
@@ -50,22 +45,29 @@ export default function BottomTabNavigator() {
                 },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.textSecondary,
-                headerShown: false,
+                headerStyle: {
+                    backgroundColor: colors.card,
+                    shadowColor: 'transparent',
+                    elevation: 0,
+                },
+                headerTitleStyle: {
+                    color: colors.text,
+                },
+                headerShown: true,
                 tabBarStyle: {
                     backgroundColor: colors.card,
                     borderTopColor: colors.border,
                 },
-                tabBarLabelStyle: { // Estilo opcional para o texto da label
+                tabBarLabelStyle: {
                     fontSize: 11,
-                    color: colors.text // Geralmente herda tabBarActive/InactiveTintColor
                 },
             })}
         >
-            <Tab.Screen name="Home" component={ProductListScreen} options={{ title: 'Início' }} />
-            <Tab.Screen name="Wishlist" component={WishlistScreen} options={{ title: 'Desejos' }} />
-            <Tab.Screen name="Transaction" component={TransactionScreen} options={{ title: 'Pedidos' }} />
-            <Tab.Screen name="Notification" component={NotificationScreen} options={{ title: 'Notificações' }} />
-            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
+            <Tab.Screen name="Home" component={ProductListScreen} options={{ title: t('homeTab'), headerShown: false }} />
+            <Tab.Screen name="Wishlist" component={WishlistScreen} options={{ title: t('wishlistTab') }} />
+            <Tab.Screen name="Transaction" component={TransactionScreen} options={{ title: t('ordersTab') }} />
+            <Tab.Screen name="Notification" component={NotificationScreen} options={{ title: t('notificationsTab') }} />
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: t('profileTab') }} />
         </Tab.Navigator>
     );
 }

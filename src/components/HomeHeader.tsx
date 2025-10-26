@@ -1,5 +1,4 @@
-// src/components/HomeHeader.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react'; // Import useState
 import { View, TextInput, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,17 +6,25 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
-import { lightColors } from '../theme/colors'; // <--- ADICIONE ESTA IMPORTAÇÃO
+import { lightColors } from '../theme/colors';
+import { useTranslation } from 'react-i18next';
 
 type HomeHeaderNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const HomeHeader: React.FC = () => {
+interface HomeHeaderProps {
+    onSearchChange: (text: string) => void;
+}
+
+
+const HomeHeader: React.FC<HomeHeaderProps> = ({ onSearchChange }) => {
     const navigation = useNavigation<HomeHeaderNavigationProp>();
     const { getTotalItems } = useCart();
-    const { colors } = useTheme(); // Obter cores do tema
+    const { colors } = useTheme();
     const [cartItemCount, setCartItemCount] = useState(0);
+    const [searchText, setSearchText] = useState('');
+    const { t } = useTranslation();
 
-    useEffect(() => {
+    React.useEffect(() => {
         setCartItemCount(getTotalItems());
     }, [getTotalItems]);
 
@@ -25,11 +32,11 @@ const HomeHeader: React.FC = () => {
         navigation.navigate('Cart');
     };
 
-    const handleSearch = (text: string) => {
-        console.log('Pesquisando por:', text);
+    const handleSearchChange = (text: string) => {
+        setSearchText(text);
+        onSearchChange(text);
     };
 
-    // Mover StyleSheet para dentro para acessar 'colors'
     const styles = StyleSheet.create({
         container: {
             flexDirection: 'row',
@@ -37,7 +44,7 @@ const HomeHeader: React.FC = () => {
             backgroundColor: colors.card,
             paddingHorizontal: 15,
             paddingVertical: 10,
-            borderBottomWidth: 1,
+            borderBottomWidth: 15,
             borderBottomColor: colors.border,
         },
         searchContainer: {
@@ -77,7 +84,7 @@ const HomeHeader: React.FC = () => {
             borderColor: colors.card,
         },
         cartBadgeText: {
-            color: colors.card, // Assumindo que a cor do card contrasta bem com a notificação
+            color: colors.card,
             fontSize: 11,
             fontWeight: 'bold',
         },
@@ -88,10 +95,11 @@ const HomeHeader: React.FC = () => {
             <View style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                 <TextInput
-                    placeholder="O que você está procurando?"
+                    placeholder={t('searchPlaceholder', "O que você está procurando?")}
                     placeholderTextColor={colors.placeholder}
                     style={styles.searchInput}
-                    onChangeText={handleSearch}
+                    value={searchText}
+                    onChangeText={handleSearchChange}
                     keyboardAppearance={colors.text === lightColors.text ? 'light' : 'dark'}
                 />
             </View>

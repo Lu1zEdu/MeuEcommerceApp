@@ -1,14 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Adicionar useMemo
+import {
+    View,
+    Text,
+    FlatList,
+    StyleSheet,
+    ActivityIndicator,
+    Alert,
+    TouchableOpacity,
+    RefreshControl // Adicionar RefreshControl
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, RootStackParamList } from '../types/navigation';
-import { auth, db, collection, getDocs } from '../firebase/firebaseConfig';
-import { signOut } from 'firebase/auth';
+import { db, collection, getDocs } from '../firebase/firebaseConfig'; // Remover 'auth' e 'signOut' se não usados aqui
 import ProductCard from '../components/ProductCard';
 import { PRODUCTS as LOCAL_PRODUCTS } from '../data/products';
 import HomeHeader from '../components/HomeHeader';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next'; // Importar useTranslation
 
 type ProductListNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductList'>;
 
@@ -18,50 +27,68 @@ const itemMargin = 8;
 export default function ProductListScreen() {
     const navigation = useNavigation<ProductListNavigationProp>();
     const { colors } = useTheme();
-    const [products, setProducts] = useState<Product[]>(LOCAL_PRODUCTS);
-    const [loading, setLoading] = useState(false);
+    const { t } = useTranslation();
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [firestoreError, setFirestoreError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const fetchProducts = useCallback(async (isRefresh = false) => {
+        if (!isRefresh) {
+            setLoading(true);
+        }
+        setFirestoreError(null);
+        let firestoreProductList: Product[] = [];
+        try {
+            const productsCol = collection(db, 'products');
+            const productSnapshot = await getDocs(productsCol);
+            firestoreProductList = productSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Product[];
+            console.log(`[ProductListScreen] ${firestoreProductList.length} produtos carregados do Firestore.`);
+        } catch (error: any) {
+            console.error("[ProductListScreen] Erro ao buscar produtos do Firestore:", error);
+            setFirestoreError(t('errorLoadingProducts', "Não foi possível carregar produtos do banco de dados."));
+        } finally {
+            const combined = [...firestoreProductList, ...LOCAL_PRODUCTS];
+            const uniqueProducts = Array.from(new Map(combined.map(p => [p.id, p])).values());
+            setAllProducts(uniqueProducts);
+
+            if (!isRefresh) {
+                setLoading(false);
+            }
+            setRefreshing(false);
+        }
+    }, [t]);
 
     useFocusEffect(
         useCallback(() => {
-            let isMounted = true;
-            const fetchFirestoreProducts = async () => {
-                setLoading(true);
-                setFirestoreError(null);
-                try {
-                    const productsCol = collection(db, 'products');
-                    const productSnapshot = await getDocs(productsCol);
-                    const firestoreProductList = productSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    })) as Product[];
-
-                    if (isMounted) {
-                        if (firestoreProductList.length > 0) {
-                            const combined = [...firestoreProductList, ...LOCAL_PRODUCTS];
-                            const uniqueProducts = Array.from(new Map(combined.map(p => [p.id, p])).values());
-                            setProducts(uniqueProducts);
-                        } else {
-                            setProducts(LOCAL_PRODUCTS);
-                        }
-                    }
-                } catch (error: any) {
-                    console.error("Erro ao buscar produtos do Firestore:", error);
-                    if (isMounted) {
-                        setProducts(LOCAL_PRODUCTS);
-                        setFirestoreError("Não foi possível carregar produtos do banco de dados.");
-                        Alert.alert("Erro Firestore", "Não foi possível carregar produtos do banco de dados.");
-                    }
-                } finally {
-                    if (isMounted) {
-                        setLoading(false);
-                    }
-                }
-            };
-            fetchFirestoreProducts();
-            return () => { isMounted = false; };
-        }, [])
+            fetchProducts();
+        }, [fetchProducts])
     );
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchProducts(true);
+    }, [fetchProducts]);
+
+    const handleSearchChange = (text: string) => {
+        setSearchTerm(text);
+    };
+
+    const filteredProducts = useMemo(() => {
+        if (!searchTerm) {
+            return allProducts;
+        }
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        return allProducts.filter(product =>
+            product.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+            product.category?.toLowerCase().includes(lowerCaseSearchTerm) ||
+            product.brand?.toLowerCase().includes(lowerCaseSearchTerm)
+        );
+    }, [allProducts, searchTerm]);
 
     const renderItem = ({ item }: { item: Product }) => (
         <ProductCard
@@ -79,22 +106,18 @@ export default function ProductListScreen() {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            padding: 20,
+            padding: 40,
             backgroundColor: colors.background,
         },
         loadingOverlay: {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
+            ...StyleSheet.absoluteFillObject,
             backgroundColor: 'rgba(0, 0, 0, 0.3)',
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 10,
         },
         loadingText: {
-            marginTop: 20,
+            marginTop: 10,
             fontSize: 16,
             color: '#FFFFFF',
             fontWeight: 'bold',
@@ -112,10 +135,11 @@ export default function ProductListScreen() {
             textAlign: 'center',
             fontWeight: 'bold',
         },
-        emptyText: {
+        emptySearchText: {
             fontSize: 16,
             color: colors.textSecondary,
             textAlign: 'center',
+            marginTop: 50,
         },
         listContainer: {
             paddingHorizontal: itemMargin / 2,
@@ -123,35 +147,54 @@ export default function ProductListScreen() {
         },
     });
 
+    if (loading && allProducts.length === 0) {
+        return (
+            <View style={styles.container}>
+                <HomeHeader onSearchChange={handleSearchChange} />
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.loadingText}>{t('loading', 'Carregando...')}</Text>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
-            <HomeHeader />
+            <HomeHeader onSearchChange={handleSearchChange} />
 
-            {loading && (
-                <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color="#FFFFFF" />
-                    <Text style={styles.loadingText}>Atualizando produtos...</Text>
-                </View>
-            )}
-
-            {firestoreError && !loading && (
+            {firestoreError && !refreshing && (
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{firestoreError}</Text>
                 </View>
             )}
 
-            {products.length === 0 && !loading ? (
+            {filteredProducts.length === 0 && !loading && !refreshing ? (
                 <View style={styles.centerContent}>
-                    <Text style={styles.emptyText}>Nenhum produto para exibir.</Text>
+                    <Text style={styles.emptySearchText}>
+                        {searchTerm
+                            ? t('noSearchResults', 'Nenhum produto encontrado para "{{term}}".', { term: searchTerm })
+                            : t('noProductsAvailable', 'Nenhum produto disponível no momento.')}
+                    </Text>
+                    <TouchableOpacity onPress={onRefresh} style={{ marginTop: 15 }}>
+                        <Text style={{ color: colors.primary }}>{t('tryRefresh', 'Tentar recarregar')}</Text>
+                    </TouchableOpacity>
                 </View>
             ) : (
                 <FlatList
-                    data={products}
+                    data={filteredProducts}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
                     numColumns={numColumns}
                     contentContainerStyle={styles.listContainer}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
+                        />
+                    }
                 />
             )}
         </View>

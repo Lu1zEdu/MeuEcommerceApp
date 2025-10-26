@@ -38,6 +38,7 @@ export default function CartScreen() {
             status: 'pending' as OrderStatus,
             createdAt: serverTimestamp() as Timestamp,
         };
+        await addDoc(collection(db, "orders"), newOrder);
 
         try {
             const docRef = await addDoc(collection(db, "orders"), newOrder);

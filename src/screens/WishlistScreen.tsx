@@ -45,7 +45,7 @@ export default function WishlistScreen() {
                 setWishlistItems([]);
                 console.log("[WishlistScreen] Nenhum ID válido para buscar após slice/filtro.");
             } else {
-                console.log(`[WishlistScreen] Executando query na coleção 'products' com IDs: ${JSON.stringify(idsToFetch)}`); // LOG IMPORTANTE
+                console.log(`[WishlistScreen] Executando query na coleção 'products' com IDs: ${JSON.stringify(idsToFetch)}`);
                 const productsRef = collection(db, 'products');
                 const q = query(productsRef, where(documentId(), 'in', idsToFetch));
 

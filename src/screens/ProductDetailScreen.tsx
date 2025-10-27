@@ -134,9 +134,8 @@ export default function ProductDetailScreen() {
     const finalPrice = useMemo(() => {
         if (!product) return 0;
         let price = product.price;
-        // CORREÇÃO: Verificar se 'variation.options' existe e é um array
         product.variations?.forEach(variation => {
-            if (variation && Array.isArray(variation.options)) { // <-- Verificação
+            if (variation && Array.isArray(variation.options)) {
                 const selectedValue = selectedVariations[variation.id];
                 const selectedOption = variation.options.find(opt => opt.value === selectedValue);
                 if (selectedOption?.priceModifier) {
@@ -150,9 +149,8 @@ export default function ProductDetailScreen() {
     const finalOriginalPrice = useMemo(() => {
         if (!product || !product.originalPrice) return undefined;
         let originalPrice = product.originalPrice;
-        // CORREÇÃO: Verificar se 'variation.options' existe e é um array
         product.variations?.forEach(variation => {
-            if (variation && Array.isArray(variation.options)) { // <-- Verificação
+            if (variation && Array.isArray(variation.options)) {
                 const selectedValue = selectedVariations[variation.id];
                 const selectedOption = variation.options.find(opt => opt.value === selectedValue);
                 if (selectedOption?.priceModifier) {
@@ -293,7 +291,6 @@ export default function ProductDetailScreen() {
                             <View key={variation.id} style={styles.variationGroup}>
                                 <Text style={styles.variationName}>{variation.name}: <Text style={{ fontWeight: 'normal' }}>{selectedVariations[variation.id] || 'Selecione'}</Text></Text>
                                 <View style={styles.optionsContainer}>
-                                    {/* CORREÇÃO: Adicionada verificação para variation.options */}
                                     {variation.options && Array.isArray(variation.options) && variation.options.map((option) => {
                                         const isSelected = selectedVariations[variation.id] === option.value;
                                         return (

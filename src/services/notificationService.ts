@@ -50,7 +50,7 @@ async function addReceivedNotification(notification: Notifications.Notification)
         }
 
 
-        notifications.unshift(baseNotification); // Adiciona no início
+        notifications.unshift(baseNotification);
 
         if (notifications.length > MAX_STORED_NOTIFICATIONS) {
             notifications = notifications.slice(0, MAX_STORED_NOTIFICATIONS);
@@ -71,7 +71,7 @@ export async function getStoredNotifications(): Promise<NotificationData[]> {
         let storedItems: any[] = [];
         try {
             storedItems = JSON.parse(notificationsJson);
-            if (!Array.isArray(storedItems)) { // Validação
+            if (!Array.isArray(storedItems)) {
                 console.error("Dados de notificação armazenados não são um array.");
                 return [];
             }
@@ -83,22 +83,19 @@ export async function getStoredNotifications(): Promise<NotificationData[]> {
 
         const notificationsWithDateObjects = storedItems
             .map(item => {
-                // Verifica se o item tem a estrutura esperada e uma data válida
                 if (item && typeof item.date === 'string') {
                     const dateObj = new Date(item.date);
-                    // Verifica se a data é válida após a conversão
                     if (!isNaN(dateObj.getTime())) {
                         return {
                             ...item,
-                            date: dateObj, // Converter string ISO para Date
+                            date: dateObj,
                         };
                     }
                 }
                 console.warn("Item de notificação inválido ou data ausente/inválida:", item);
-                return null; // Ignora itens inválidos
+                return null;
             })
-            .filter((item): item is NotificationData => item !== null); // Remove itens nulos e ajusta o tipo
-
+            .filter((item): item is NotificationData => item !== null);
 
         return notificationsWithDateObjects;
 
@@ -113,10 +110,9 @@ export async function markNotificationAsRead(notificationId: string) {
         const notifications = await getStoredNotifications();
         const updatedNotificationsWithStringDate = notifications.map(n => {
             const newItem = n.id === notificationId ? { ...n, read: true } : n;
-            // Garante que a data seja um objeto Date antes de chamar toISOString
             const dateString = (newItem.date instanceof Date && !isNaN(newItem.date.getTime()))
                 ? newItem.date.toISOString()
-                : new Date().toISOString(); // Fallback para data atual se inválida
+                : new Date().toISOString(); 
             return { ...newItem, date: dateString };
         });
 
@@ -135,7 +131,6 @@ export async function clearStoredNotifications() {
     }
 }
 
-// --- Outras funções (registerForPushNotificationsAsync, scheduleLocalNotification, etc.) permanecem como na resposta anterior ---
 
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
     let token;
@@ -169,15 +164,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     }
 
     try {
-        // Se estiver usando EAS Build/Submit e precisar do token para push remoto, descomente e ajuste:
-        // const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-        token = (await Notifications.getExpoPushTokenAsync(/* { projectId } */)).data;
+        token = (await Notifications.getExpoPushTokenAsync()).data;
         console.log("Expo Push Token:", token);
     } catch (e) {
-        // O erro "Failed to get push token" é esperado no Expo Go para Android se não logado, etc.
-        // Não impede notificações locais.
         console.warn("Aviso ao obter Expo Push Token (pode ser esperado no Expo Go):", e);
-        // alert(t('errorGetPushToken', 'Não foi possível obter o token para notificações push. Notificações remotas podem não funcionar.'));
     }
 
     return token;

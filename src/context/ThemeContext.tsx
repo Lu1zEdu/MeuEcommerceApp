@@ -46,7 +46,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     );
 };
 
-// Hook customizado para usar o contexto do tema
 export const useTheme = (): ThemeContextData => {
     const context = useContext(ThemeContext);
     if (!context) {

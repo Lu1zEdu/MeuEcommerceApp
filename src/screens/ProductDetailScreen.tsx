@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, Dimensions, Button } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Image,
+    TouchableOpacity,
+    ScrollView,
+    Alert,
+    ActivityIndicator,
+    FlatList,
+    Dimensions,
+    Button,
+} from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, RootStackParamList, ProductReview, SelectedVariationsType } from '../types/navigation';
@@ -8,9 +20,8 @@ import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useWishlist } from '../context/WishlistContext';
 import { useTranslation } from 'react-i18next';
-import { db, doc, getDoc, collection, query, where, getDocs, Timestamp, limit, documentId } from '../firebase/firebaseConfig';
+import { db, doc, getDoc, collection, query, where, getDocs, Timestamp, limit, documentId, orderBy } from '../firebase/firebaseConfig';
 import ProductCard from '../components/ProductCard';
-import { PRODUCTS as LOCAL_PRODUCTS, EXAMPLE_REVIEWS } from '../data/products';
 import StarRating from '../components/StarRating';
 
 type ProductDetailRouteProp = RouteProp<RootStackParamList, 'ProductDetail'>;
@@ -33,8 +44,33 @@ export default function ProductDetailScreen() {
     const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
     const [loadingSimilar, setLoadingSimilar] = useState(false);
     const [reviews, setReviews] = useState<ProductReview[]>([]);
+    const [loadingReviews, setLoadingReviews] = useState(false);
     const [showAllReviews, setShowAllReviews] = useState(false);
     const [selectedVariations, setSelectedVariations] = useState<SelectedVariationsType>({});
+
+    const fetchReviews = useCallback(async (currentProductId: string) => {
+        setLoadingReviews(true);
+        setReviews([]);
+        try {
+            const reviewsRef = collection(db, 'reviews');
+            const q = query(
+                reviewsRef,
+                where('productId', '==', currentProductId),
+                orderBy('createdAt', 'desc')
+            );
+            const querySnapshot = await getDocs(q);
+            const fetchedReviews = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: (doc.data().createdAt as Timestamp)?.toDate() ?? new Date()
+            })) as ProductReview[];
+            setReviews(fetchedReviews);
+        } catch (error) {
+            console.error("Erro ao buscar avaliações:", error);
+        } finally {
+            setLoadingReviews(false);
+        }
+    }, []);
 
     const fetchSimilarProducts = useCallback(async (category: string, currentProductId: string) => {
         if (!category) return;
@@ -57,7 +93,7 @@ export default function ProductDetailScreen() {
     useEffect(() => {
         const fetchProduct = async () => {
             setLoadingProduct(true);
-            setProduct(null); setSimilarProducts([]); setQuantity(1); setReviews([]); setSelectedVariations({});
+            setProduct(null); setSimilarProducts([]); setQuantity(1); setReviews([]); setSelectedVariations({}); setLoadingReviews(false);
             let foundProduct: Product | null = null;
             try {
                 const productRef = doc(db, 'products', productId);
@@ -65,34 +101,32 @@ export default function ProductDetailScreen() {
                 if (docSnap.exists()) {
                     foundProduct = { id: docSnap.id, ...docSnap.data() } as Product;
                 } else {
-                    const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId);
-                    if (localProduct) foundProduct = localProduct;
-                    else Alert.alert(t('alertErrorTitle'), "Produto não encontrado.");
+                    console.warn(`Produto com ID ${productId} não encontrado no Firestore.`);
+                    Alert.alert(t('alertErrorTitle'), "Produto não encontrado.");
                 }
             } catch (error) {
                 console.error("Erro ao buscar detalhes (Firestore):", error);
-                const localProduct = LOCAL_PRODUCTS.find(p => p.id === productId);
-                if (localProduct) foundProduct = localProduct;
-                else Alert.alert(t('alertErrorTitle'), "Erro ao carregar detalhes do produto.");
+                Alert.alert(t('alertErrorTitle'), "Erro ao carregar detalhes do produto.");
             } finally {
                 if (foundProduct) {
                     const initialVariations: SelectedVariationsType = {};
-                    foundProduct.variations?.forEach(variation => {
-                        if (variation.options && variation.options.length > 0) {
-                            initialVariations[variation.id] = variation.options[0].value;
-                        }
-                    });
+                    if (foundProduct.variations && Array.isArray(foundProduct.variations)) {
+                        foundProduct.variations.forEach(variation => {
+                            if (variation && variation.options && Array.isArray(variation.options) && variation.options.length > 0) {
+                                initialVariations[variation.id] = variation.options[0].value;
+                            }
+                        });
+                    }
                     setSelectedVariations(initialVariations);
                     setProduct(foundProduct);
                     fetchSimilarProducts(foundProduct.category, foundProduct.id);
-                    const example = EXAMPLE_REVIEWS[foundProduct.id as keyof typeof EXAMPLE_REVIEWS];
-                    if (example) setReviews(example);
+                    fetchReviews(foundProduct.id);
                 }
                 setLoadingProduct(false);
             }
         };
         fetchProduct();
-    }, [productId, t, fetchSimilarProducts]);
+    }, [productId, t, fetchSimilarProducts, fetchReviews]);
 
 
     const isFavorite = product ? isInWishlist(product.id) : false;
@@ -100,11 +134,14 @@ export default function ProductDetailScreen() {
     const finalPrice = useMemo(() => {
         if (!product) return 0;
         let price = product.price;
+        // CORREÇÃO: Verificar se 'variation.options' existe e é um array
         product.variations?.forEach(variation => {
-            const selectedValue = selectedVariations[variation.id];
-            const selectedOption = variation.options.find(opt => opt.value === selectedValue);
-            if (selectedOption?.priceModifier) {
-                price += selectedOption.priceModifier;
+            if (variation && Array.isArray(variation.options)) { // <-- Verificação
+                const selectedValue = selectedVariations[variation.id];
+                const selectedOption = variation.options.find(opt => opt.value === selectedValue);
+                if (selectedOption?.priceModifier) {
+                    price += selectedOption.priceModifier;
+                }
             }
         });
         return price;
@@ -113,11 +150,14 @@ export default function ProductDetailScreen() {
     const finalOriginalPrice = useMemo(() => {
         if (!product || !product.originalPrice) return undefined;
         let originalPrice = product.originalPrice;
+        // CORREÇÃO: Verificar se 'variation.options' existe e é um array
         product.variations?.forEach(variation => {
-            const selectedValue = selectedVariations[variation.id];
-            const selectedOption = variation.options.find(opt => opt.value === selectedValue);
-            if (selectedOption?.priceModifier) {
-                originalPrice += selectedOption.priceModifier;
+            if (variation && Array.isArray(variation.options)) { // <-- Verificação
+                const selectedValue = selectedVariations[variation.id];
+                const selectedOption = variation.options.find(opt => opt.value === selectedValue);
+                if (selectedOption?.priceModifier) {
+                    originalPrice += selectedOption.priceModifier;
+                }
             }
         });
         return originalPrice > finalPrice ? originalPrice : undefined;
@@ -143,23 +183,19 @@ export default function ProductDetailScreen() {
     const renderImageItem = ({ item }: { item: string }) => (<Image source={{ uri: item }} style={styles.galleryImage} resizeMode="cover" />);
     const renderSimilarItem = ({ item }: { item: Product }) => (<View style={styles.similarItemContainer}><ProductCard product={item} onPress={() => navigation.push('ProductDetail', { productId: item.id })} /></View>);
 
-    const formatReviewDate = (date: ProductReview['createdAt']): string => {
-        if (!date) return '';
-        let d: Date;
-        if (date instanceof Date) { d = date; }
-        else if (date && typeof date === 'object' && 'seconds' in date) { d = new Date(date.seconds * 1000); }
-        else { return ''; }
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    const formatReviewDate = (date: Date | null): string => {
+        if (!date || !(date instanceof Date)) return '';
+        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
     };
 
     const renderReviewItem = ({ item }: { item: ProductReview }) => (
         <View style={styles.reviewItem}>
             <View style={styles.reviewHeader}>
-                <Text style={styles.reviewUserName}>{item.userName}</Text>
+                <Text style={styles.reviewUserName}>{item.userName || t('anonymousUser', 'Usuário Anônimo')}</Text>
                 <StarRating rating={item.rating} size={14} color="#f0ad4e" />
             </View>
             <Text style={styles.reviewComment}>{item.comment}</Text>
-            {item.createdAt && <Text style={styles.reviewDate}>{formatReviewDate(item.createdAt)}</Text>}
+            {item.createdAt && <Text style={styles.reviewDate}>{formatReviewDate(item.createdAt as Date)}</Text>}
         </View>
     );
 
@@ -199,7 +235,7 @@ export default function ProductDetailScreen() {
         addButtonDisabled: { backgroundColor: colors.textSecondary },
         addButtonText: { color: colors.card, fontSize: 16, fontWeight: 'bold' },
         sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 15, paddingHorizontal: 20, marginTop: 10 },
-        reviewsSection: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, marginHorizontal: -20, paddingHorizontal: 20 },
+        reviewsSection: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, marginHorizontal: -20, paddingHorizontal: 20, minHeight: 100 },
         similarSection: { paddingTop: 20, borderTopWidth: 1, borderTopColor: colors.border, marginHorizontal: -20, paddingBottom: 20 },
         placeholderText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 10 },
         similarListContainer: { paddingLeft: 20, paddingRight: 10 },
@@ -217,6 +253,8 @@ export default function ProductDetailScreen() {
     if (!product) { return (<View style={styles.loadingContainer}><Text style={styles.loadingText}>Produto não encontrado!</Text><Button title="Voltar" onPress={() => navigation.goBack()} color={colors.primary} /></View>); }
 
     const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+    const reviewCountDisplay = loadingReviews ? '...' : reviews.length;
+
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}>
@@ -237,10 +275,10 @@ export default function ProductDetailScreen() {
                 {product.brand && <Text style={styles.brand}>{product.brand}</Text>}
                 <Text style={styles.category}>{t('categoryLabel')} {product.category}</Text>
 
-                {product.averageRating !== undefined && product.reviewCount !== undefined && product.reviewCount > 0 && (
+                {(product.averageRating !== undefined || reviews.length > 0) && (
                     <View style={styles.ratingContainer}>
-                        <StarRating rating={product.averageRating} size={18} />
-                        <Text style={styles.reviewCountText}>({product.reviewCount} {t(product.reviewCount === 1 ? 'review_one' : 'review_other', { count: product.reviewCount })})</Text>
+                        <StarRating rating={product.averageRating ?? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length || 0)} size={18} />
+                        <Text style={styles.reviewCountText}>({reviewCountDisplay} {t(reviews.length === 1 ? 'review_one' : 'review_other', { count: reviews.length })})</Text>
                     </View>
                 )}
 
@@ -255,10 +293,15 @@ export default function ProductDetailScreen() {
                             <View key={variation.id} style={styles.variationGroup}>
                                 <Text style={styles.variationName}>{variation.name}: <Text style={{ fontWeight: 'normal' }}>{selectedVariations[variation.id] || 'Selecione'}</Text></Text>
                                 <View style={styles.optionsContainer}>
-                                    {variation.options.map((option) => {
+                                    {/* CORREÇÃO: Adicionada verificação para variation.options */}
+                                    {variation.options && Array.isArray(variation.options) && variation.options.map((option) => {
                                         const isSelected = selectedVariations[variation.id] === option.value;
                                         return (
-                                            <TouchableOpacity key={option.value} style={[styles.optionButton, isSelected && styles.optionButtonSelected]} onPress={() => handleSelectVariation(variation.id, option.value)}>
+                                            <TouchableOpacity
+                                                key={`${variation.id}-${option.value}`}
+                                                style={[styles.optionButton, isSelected && styles.optionButtonSelected]}
+                                                onPress={() => handleSelectVariation(variation.id, option.value)}
+                                            >
                                                 <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>{option.value}</Text>
                                             </TouchableOpacity>
                                         );
@@ -289,23 +332,32 @@ export default function ProductDetailScreen() {
             </View>
 
             <View style={styles.reviewsSection}>
-                <Text style={styles.sectionTitle}>Avaliações ({product.reviewCount || 0})</Text>
-                {reviews.length > 0 ? (
+                <Text style={styles.sectionTitle}>Avaliações ({reviewCountDisplay})</Text>
+                {loadingReviews ? (
+                    <ActivityIndicator style={{ marginTop: 20 }} color={colors.primary} />
+                ) : reviews.length > 0 ? (
                     <>
-                        <FlatList data={visibleReviews} renderItem={renderReviewItem} keyExtractor={(item) => item.id} scrollEnabled={false} />
+                        <FlatList
+                            data={visibleReviews}
+                            renderItem={renderReviewItem}
+                            keyExtractor={(item) => item.id}
+                            scrollEnabled={false}
+                        />
                         {reviews.length > 3 && (
                             <TouchableOpacity style={styles.readMoreButton} onPress={() => setShowAllReviews(!showAllReviews)}>
-                                <Text style={styles.readMoreText}>{showAllReviews ? "Mostrar menos" : "Ler todas as avaliações"}</Text>
+                                <Text style={styles.readMoreText}>{showAllReviews ? t('showLessReviews', "Mostrar menos") : t('readAllReviews', "Ler todas as avaliações")}</Text>
                             </TouchableOpacity>
                         )}
                     </>
-                ) : (<Text style={styles.placeholderText}>Nenhuma avaliação ainda.</Text>)}
+                ) : (
+                    <Text style={styles.placeholderText}>{t('noReviewsYet', 'Nenhuma avaliação ainda.')}</Text>
+                )}
             </View>
 
             {loadingSimilar ? (<ActivityIndicator style={{ marginVertical: 20 }} color={colors.primary} />
             ) : similarProducts.length > 0 ? (
                 <View style={styles.similarSection}>
-                    <Text style={styles.sectionTitle}>Produtos Similares</Text>
+                    <Text style={styles.sectionTitle}><Text>Produtos Similares</Text></Text>
                     <FlatList data={similarProducts} renderItem={renderSimilarItem} keyExtractor={(item) => item.id} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarListContainer} />
                 </View>
             ) : null}

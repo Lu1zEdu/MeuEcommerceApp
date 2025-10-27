@@ -1,4 +1,3 @@
-// src/screens/SignupScreen.tsx
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -6,8 +5,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 import { RootStackParamList } from '../types/navigation';
-import { useTheme } from '../context/ThemeContext'; // 1. Importar
-import { lightColors } from '../theme/colors'; // Para keyboardAppearance
+import { useTheme } from '../context/ThemeContext';
+import { lightColors } from '../theme/colors';
+import { useTranslation } from 'react-i18next';
 
 type SignupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Signup'>;
 
@@ -17,20 +17,20 @@ export default function SignupScreen() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const navigation = useNavigation<SignupScreenNavigationProp>();
-    const { colors } = useTheme(); // 2. Obter cores
+    const { colors } = useTheme();
+    const { t } = useTranslation();
 
     const handleSignup = async () => {
-        // ... (lógica de signup inalterada) ...
         if (!name || !email || !password || !confirmPassword) {
-            Alert.alert("Erro", "Por favor, preencha todos os campos.");
+            Alert.alert(t('alertErrorTitle'), t('errorFillFields'));
             return;
         }
         if (password !== confirmPassword) {
-            Alert.alert("Erro", "As senhas não coincidem.");
+            Alert.alert(t('alertErrorTitle'), t('errorPasswordsMismatch'));
             return;
         }
         if (password.length < 6) {
-            Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
+            Alert.alert(t('alertErrorTitle'), t('errorPasswordTooShort'));
             return;
         }
 
@@ -39,24 +39,22 @@ export default function SignupScreen() {
             const user = userCredential.user;
             await updateProfile(user, { displayName: name });
             console.log('Cadastro e atualização de perfil bem-sucedidos!');
-            Alert.alert("Sucesso", `Conta para ${name} criada com sucesso! Faça o login agora.`);
+            Alert.alert(t('alertSuccessTitle'), t('successAccountCreated', { name: name }));
             navigation.navigate('Login');
         } catch (error: any) {
-            // ... (tratamento de erro inalterado) ...
             console.error("Erro no cadastro:", error);
-            let errorMessage = "Não foi possível criar a conta.";
+            let errorMessage = t('errorSignupFailed');
             if (error.code === 'auth/email-already-in-use') {
-                errorMessage = 'Este endereço de e-mail já está em uso.';
+                errorMessage = t('errorEmailInUse');
             } else if (error.code === 'auth/invalid-email') {
-                errorMessage = 'O endereço de e-mail fornecido não é válido.';
+                errorMessage = t('errorInvalidEmail');
             } else if (error.code === 'auth/weak-password') {
-                errorMessage = 'A senha é muito fraca. Use pelo menos 6 caracteres.';
+                errorMessage = t('errorWeakPassword');
             }
-            Alert.alert("Erro no Cadastro", errorMessage);
+            Alert.alert(t('alertErrorTitle'), errorMessage);
         }
     };
 
-    // 3. Mover StyleSheet para dentro
     const styles = StyleSheet.create({
         scrollContainer: {
             flexGrow: 1,
@@ -65,29 +63,28 @@ export default function SignupScreen() {
         container: {
             justifyContent: 'center',
             padding: 20,
-            backgroundColor: colors.background, // Cor do tema
+            backgroundColor: colors.background,
         },
         title: {
             fontSize: 28,
             fontWeight: 'bold',
             marginBottom: 25,
             textAlign: 'center',
-            color: colors.text, // Cor do tema
+            color: colors.text,
         },
         input: {
             height: 50,
-            borderColor: colors.border, // Cor do tema
+            borderColor: colors.border,
             borderWidth: 1,
             marginBottom: 15,
             paddingHorizontal: 15,
             borderRadius: 8,
             fontSize: 16,
-            backgroundColor: colors.card, // Cor do tema
-            color: colors.text, // Cor do texto digitado
+            backgroundColor: colors.card,
+            color: colors.text,
         },
         button: {
-            // Usar uma cor diferente para cadastro? Ou manter primary?
-            backgroundColor: '#28a745', // Verde mantido por enquanto
+            backgroundColor: '#28a745',
             paddingVertical: 15,
             borderRadius: 8,
             alignItems: 'center',
@@ -95,12 +92,12 @@ export default function SignupScreen() {
             marginTop: 10,
         },
         buttonText: {
-            color: colors.card, // Texto branco
+            color: colors.card,
             fontSize: 16,
             fontWeight: 'bold',
         },
         linkText: {
-            color: colors.primary, // Cor do tema
+            color: colors.primary,
             textAlign: 'center',
             fontSize: 16,
         }
@@ -109,15 +106,13 @@ export default function SignupScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1, backgroundColor: colors.background }} // Fundo no KAV
+            style={{ flex: 1, backgroundColor: colors.background }}
         >
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.container}>
-                    {/* Título será colorido pelo header do AppNavigator */}
-                    {/* <Text style={styles.title}>Criar Conta</Text> */}
                     <TextInput
                         style={styles.input}
-                        placeholder="Nome Completo"
+                        placeholder={t('signupNamePlaceholder')}
                         placeholderTextColor={colors.placeholder}
                         value={name}
                         onChangeText={setName}
@@ -126,7 +121,7 @@ export default function SignupScreen() {
                     />
                     <TextInput
                         style={styles.input}
-                        placeholder="E-mail"
+                        placeholder={t('loginEmailPlaceholder')}
                         placeholderTextColor={colors.placeholder}
                         value={email}
                         onChangeText={setEmail}
@@ -136,7 +131,7 @@ export default function SignupScreen() {
                     />
                     <TextInput
                         style={styles.input}
-                        placeholder="Senha (mínimo 6 caracteres)"
+                        placeholder={t('signupPasswordMinChars')}
                         placeholderTextColor={colors.placeholder}
                         value={password}
                         onChangeText={setPassword}
@@ -145,7 +140,7 @@ export default function SignupScreen() {
                     />
                     <TextInput
                         style={styles.input}
-                        placeholder="Confirmar Senha"
+                        placeholder={t('signupPasswordConfirmPlaceholder')}
                         placeholderTextColor={colors.placeholder}
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
@@ -153,10 +148,10 @@ export default function SignupScreen() {
                         keyboardAppearance={colors.text === lightColors.text ? 'light' : 'dark'}
                     />
                     <TouchableOpacity style={styles.button} onPress={handleSignup}>
-                        <Text style={styles.buttonText}>Cadastrar</Text>
+                        <Text style={styles.buttonText}>{t('signupButton')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Text style={styles.linkText}>Já tem uma conta? Faça login</Text>
+                        <Text style={styles.linkText}>{t('signupLoginLink')}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

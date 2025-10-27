@@ -22,6 +22,7 @@ export default function CartScreen() {
         const user = auth.currentUser;
         if (!user) {
             console.error("Usuário não autenticado para finalizar pedido.");
+            alert(t('errorUserNotAuthenticated', 'Você precisa estar logado para finalizar um pedido.'));
             return;
         }
         if (items.length === 0) {
@@ -36,16 +37,17 @@ export default function CartScreen() {
             items: orderItems,
             totalPrice: getTotalPrice(),
             status: 'pending' as OrderStatus,
-            createdAt: serverTimestamp() as Timestamp,
+            createdAt: serverTimestamp(),
         };
-        await addDoc(collection(db, "orders"), newOrder);
+
 
         try {
             const docRef = await addDoc(collection(db, "orders"), newOrder);
+            const orderIdShort = docRef.id.substring(0, 6);
 
             await scheduleLocalNotification(
                 t('orderPlacedTitle', "Pedido Recebido!"),
-                t('orderPlacedBody', `Seu pedido #${docRef.id.substring(0, 6)}... foi recebido e está pendente.`),
+                t('orderPlacedBody', `Seu pedido #${orderIdShort}... foi recebido e está pendente.`, { orderIdShort: orderIdShort }),
                 { orderId: docRef.id, navigateTo: 'Transaction' }
             );
 

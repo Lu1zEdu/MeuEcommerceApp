@@ -1,23 +1,21 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Adicionar useMemo
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
     FlatList,
     StyleSheet,
     ActivityIndicator,
-    Alert,
     TouchableOpacity,
-    RefreshControl // Adicionar RefreshControl
+    RefreshControl
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, RootStackParamList } from '../types/navigation';
-import { db, collection, getDocs } from '../firebase/firebaseConfig'; // Remover 'auth' e 'signOut' se não usados aqui
+import { db, collection, getDocs } from '../firebase/firebaseConfig';
 import ProductCard from '../components/ProductCard';
-import { PRODUCTS as LOCAL_PRODUCTS } from '../data/products';
 import HomeHeader from '../components/HomeHeader';
 import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from 'react-i18next'; // Importar useTranslation
+import { useTranslation } from 'react-i18next';
 
 type ProductListNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProductList'>;
 
@@ -48,14 +46,14 @@ export default function ProductListScreen() {
                 ...doc.data()
             })) as Product[];
             console.log(`[ProductListScreen] ${firestoreProductList.length} produtos carregados do Firestore.`);
+
+            setAllProducts(firestoreProductList);
+
         } catch (error: any) {
             console.error("[ProductListScreen] Erro ao buscar produtos do Firestore:", error);
             setFirestoreError(t('errorLoadingProducts', "Não foi possível carregar produtos do banco de dados."));
+            setAllProducts([]);
         } finally {
-            const combined = [...firestoreProductList, ...LOCAL_PRODUCTS];
-            const uniqueProducts = Array.from(new Map(combined.map(p => [p.id, p])).values());
-            setAllProducts(uniqueProducts);
-
             if (!isRefresh) {
                 setLoading(false);
             }
@@ -102,24 +100,19 @@ export default function ProductListScreen() {
             flex: 1,
             backgroundColor: colors.background,
         },
+        contentContainer: {
+            flex: 1,
+        },
         centerContent: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            padding: 40,
-            backgroundColor: colors.background,
-        },
-        loadingOverlay: {
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10,
+            padding: 20,
         },
         loadingText: {
             marginTop: 10,
             fontSize: 16,
-            color: '#FFFFFF',
+            color: colors.textSecondary,
             fontWeight: 'bold',
         },
         errorContainer: {
@@ -144,59 +137,77 @@ export default function ProductListScreen() {
         listContainer: {
             paddingHorizontal: itemMargin / 2,
             paddingBottom: itemMargin,
+            paddingTop: itemMargin,
         },
+        refreshButtonText: {
+            color: colors.primary,
+            marginTop: 15,
+        }
     });
 
-    if (loading && allProducts.length === 0) {
-        return (
-            <View style={styles.container}>
-                <HomeHeader onSearchChange={handleSearchChange} />
+    const renderMainContent = () => {
+        if (loading && allProducts.length === 0 && !refreshing) {
+            return (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.loadingText}>{t('loading', 'Carregando...')}</Text>
                 </View>
-            </View>
-        );
-    }
+            );
+        }
 
-    return (
-        <View style={styles.container}>
-            <HomeHeader onSearchChange={handleSearchChange} />
-
-            {firestoreError && !refreshing && (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{firestoreError}</Text>
+        if (firestoreError && !refreshing) {
+            return (
+                <View style={styles.centerContent}>
+                    <View style={styles.errorContainer}>
+                        <Text style={styles.errorText}>{firestoreError}</Text>
+                    </View>
+                    <TouchableOpacity onPress={onRefresh}>
+                        <Text style={styles.refreshButtonText}>{t('tryRefresh', 'Tentar recarregar')}</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
+            );
+        }
 
-            {filteredProducts.length === 0 && !loading && !refreshing ? (
+        if (filteredProducts.length === 0 && !loading && !refreshing) {
+            return (
                 <View style={styles.centerContent}>
                     <Text style={styles.emptySearchText}>
                         {searchTerm
                             ? t('noSearchResults', 'Nenhum produto encontrado para "{{term}}".', { term: searchTerm })
                             : t('noProductsAvailable', 'Nenhum produto disponível no momento.')}
                     </Text>
-                    <TouchableOpacity onPress={onRefresh} style={{ marginTop: 15 }}>
-                        <Text style={{ color: colors.primary }}>{t('tryRefresh', 'Tentar recarregar')}</Text>
+                    <TouchableOpacity onPress={onRefresh}>
+                        <Text style={styles.refreshButtonText}>{t('tryRefresh', 'Tentar recarregar')}</Text>
                     </TouchableOpacity>
                 </View>
-            ) : (
-                <FlatList
-                    data={filteredProducts}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item.id}
-                    numColumns={numColumns}
-                    contentContainerStyle={styles.listContainer}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={onRefresh}
-                            colors={[colors.primary]}
-                            tintColor={colors.primary}
-                        />
-                    }
-                />
-            )}
+            );
+        }
+
+        return (
+            <FlatList
+                data={filteredProducts}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.id}
+                numColumns={numColumns}
+                contentContainerStyle={styles.listContainer}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[colors.primary]}
+                        tintColor={colors.primary}
+                    />
+                }
+            />
+        );
+    };
+
+    return (
+        <View style={styles.container}>
+            <HomeHeader onSearchChange={handleSearchChange} />
+            <View style={styles.contentContainer}>
+                {renderMainContent()}
+            </View>
         </View>
     );
 }

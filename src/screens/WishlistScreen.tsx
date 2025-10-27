@@ -5,7 +5,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
 import { useWishlist } from '../context/WishlistContext';
 import { Product, RootStackParamList } from '../types/navigation';
-// VERIFIQUE: Garantir que TODAS as importações do firestore venham daqui
 import { db, collection, getDocs, query, where, documentId } from '../firebase/firebaseConfig';
 import ProductCard from '../components/ProductCard';
 import { useTranslation } from 'react-i18next';

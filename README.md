@@ -6,7 +6,7 @@
 
 O arquivo `.apk` compilado para instalação direta em dispositivos Android pode ser baixado no link abaixo:
 
-[APK](https://expo.dev/accounts/m3rl1m/projects/MeuEcommerceApp/builds/08a753c2-414c-417b-b1b3-50c6a9c020c6)
+[Link do APK](https://expo.dev/accounts/m3rl1m/projects/MeuEcommerceApp/builds/08a753c2-414c-417b-b1b3-50c6a9c020c6)
 
 -----
 
